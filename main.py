@@ -76,7 +76,6 @@ if not file_exists(config_path):
 token: str = data.read("token")
 prefix: str = data.read("prefix")
 
-
 clone_settings: dict = data.read("clone_settings")
 
 name_syntax: str = clone_settings["name_syntax"]
@@ -249,7 +248,7 @@ class ServerCopy:
             async for message in get_key(channel, self.mappings["channels"]).history(limit=limit):
                 author: discord.User = message.author
                 await webhook.send(content=message.content, avatar_url=author.avatar_url,
-                                   username=author.name)
+                                   username=author.name, embeds=message.embeds)
                 await asyncio.sleep(self.webhook_delay)
             if clear:
                 # delete webhook
