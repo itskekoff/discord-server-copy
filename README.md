@@ -41,5 +41,8 @@ Configure it and re-run start.bat.
 ## Requirements
 In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project has been tested with Python versions from 3.5.3 to 3.9, and it may also work with 3.10 (though it has not been tested).
 Using discord.py 1.7.3
-## Contribution
-You can contribute to project using [Pull Requests](https://github.com/itskekoff/discord-server-copy/pulls)
+### Contribution
+When submitting a pull request:
+- Clone the repo.
+- Create a branch off of master and give it a meaningful name (e.g. my-awesome-new-feature).
+- Open a [pull request](https://github.com/itskekoff/discord-server-copy/pulls) on [GitHub](https://github.com) and describe the feature or fix.
