@@ -45,7 +45,7 @@ class Configuration:
 
 
 config_path = "config.json"
-
+print("* If gives KeyError, delete config and restart program.")
 data: Configuration = Configuration(config_path)
 default_config: dict = {
     "token": "Your discord account token",
@@ -267,11 +267,14 @@ class ServerCopy:
                     if message.attachments is not None:
                         for attachment in message.attachments:
                             files.append(await attachment.to_file())
-                    await webhook.send(content=message.content, avatar_url=author.avatar_url,
-                                       username=author.name + "#" + author.discriminator, embeds=message.embeds,
-                                       files=files)
+                    try:
+                        await webhook.send(content=message.content, avatar_url=author.avatar_url,
+                                           username=author.name + "#" + author.discriminator, embeds=message.embeds,
+                                           files=files)
+                    except discord.errors.HTTPException:
+                        print("* Payload too large, skipping message in #" + original_channel.name)
                     await asyncio.sleep(self.webhook_delay)
-            except discord.errors.Forbidden:
+            except discord.errors.Forbidden as e:
                 if self.debug:
                     print("* Missing access for channel: #" + original_channel.name)
             if clear:
@@ -312,6 +315,5 @@ async def copy(ctx: commands.Context):
     print("* Done")
 
 
-Updater("1.1.6")
-
+Updater("1.1.7")
 bot.run(token, bot=False)
