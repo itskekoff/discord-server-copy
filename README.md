@@ -33,7 +33,7 @@ It will be create new guild using "name_syntax" that you defined in config.json
 ## Features
 ```diff
 + Clone Channels
-+ Channel Permissions
++ Channel Permissions, Role permissions
 + Server Roles
 + Server Name
 + Server Banner / Icon
