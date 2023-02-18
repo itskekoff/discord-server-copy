@@ -24,6 +24,8 @@ Now run start.bat, it will be create config.json:
 }
 ```
 Configure it and re-run start.bat.
+
+After successfully login, type in any guild: cp!clone (or copy, paste). "cp!" is prefix that you defined in config.json
 ## Features
 ```diff
 + Clone Channels
