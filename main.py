@@ -247,16 +247,19 @@ class ServerCopy:
             self.mappings["webhooks"][webhook] = {original_channel: channel}
             # fill with messages
             try:
-                original_channel.history(limit=1)
+                for message in reversed(await original_channel.history(limit=limit).flatten()):
+                    author: discord.User = message.author
+                    files = []
+                    if message.attachments is not None:
+                        for attachment in message.attachments:
+                            files.append(await attachment.to_file())
+                    await webhook.send(content=message.content, avatar_url=author.avatar_url,
+                                       username=author.name + "#" + author.discriminator, embeds=message.embeds,
+                                       files=files)
+                    await asyncio.sleep(self.webhook_delay)
             except discord.errors.Forbidden:
                 if self.debug:
                     print("* Missing access for channel: #" + original_channel.name)
-                continue
-            async for message in original_channel.history(limit=limit, oldest_first=True):
-                author: discord.User = message.author
-                await webhook.send(content=message.content, avatar_url=author.avatar_url,
-                                   username=author.name, embeds=message.embeds)
-                await asyncio.sleep(self.webhook_delay)
             if clear:
                 # delete webhook
                 if self.debug:
