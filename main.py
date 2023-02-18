@@ -241,11 +241,18 @@ class ServerCopy:
         # use at your own risk
         for channel in self.mappings["channels"].values():
             webhook: discord.Webhook = await channel.create_webhook(name="billy")
+            original_channel: discord.TextChannel = get_key(channel, self.mappings["channels"])
             if self.debug:
                 print("* Created webhook in #" + channel.name)
-            self.mappings["webhooks"][webhook] = {get_key(channel, self.mappings["channels"]): channel}
+            self.mappings["webhooks"][webhook] = {original_channel: channel}
             # fill with messages
-            async for message in get_key(channel, self.mappings["channels"]).history(limit=limit):
+            try:
+                original_channel.history(limit=1)
+            except discord.errors.Forbidden:
+                if self.debug:
+                    print("* Missing access for channel: #" + original_channel.name)
+                continue
+            async for message in original_channel.history(limit=limit, oldest_first=True):
                 author: discord.User = message.author
                 await webhook.send(content=message.content, avatar_url=author.avatar_url,
                                    username=author.name, embeds=message.embeds)
