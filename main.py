@@ -106,8 +106,8 @@ class Updater:
         def check():
             resp = urllib.request.urlopen(
                 url="https://raw.githubusercontent.com/itskekoff/discord-server-copy/main/main.py").read()
-            target_version = resp[resp.find('Updater('):]
-            if version in target_version:
+            target_version = resp[resp.find(b'Updater('):]
+            if version.encode("utf-8") in target_version:
                 print("* Updates doesn't found.")
             else:
                 print("* Update available. Recommend to download it.")
@@ -312,6 +312,6 @@ async def copy(ctx: commands.Context):
     print("* Done")
 
 
-Updater("1.1.5")
+Updater("1.1.6")
 
 bot.run(token, bot=False)
