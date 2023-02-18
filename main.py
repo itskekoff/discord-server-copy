@@ -272,9 +272,10 @@ class ServerCopy:
                                            username=author.name + "#" + author.discriminator, embeds=message.embeds,
                                            files=files)
                     except discord.errors.HTTPException:
-                        print("* Payload too large, skipping message in #" + original_channel.name)
+                        if self.debug:
+                            print("* Payload too large, skipping message in #" + original_channel.name)
                     await asyncio.sleep(self.webhook_delay)
-            except discord.errors.Forbidden as e:
+            except discord.errors.Forbidden:
                 if self.debug:
                     print("* Missing access for channel: #" + original_channel.name)
             if clear:
@@ -315,5 +316,5 @@ async def copy(ctx: commands.Context):
     print("* Done")
 
 
-Updater("1.1.7")
+Updater("1.1.8")
 bot.run(token, bot=False)
