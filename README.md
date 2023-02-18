@@ -24,6 +24,19 @@ Now run start.bat, it will be create config.json:
 }
 ```
 Configure it and re-run start.bat.
+## Features
+```diff
++ Clone Channels
++ Channel Permissions
++ Server Roles
++ Server Name
++ Server Banner / Icon
++ Server Emojis
++ Server Settings 
+- Server Messages
+- Server Members
+- Server Stickers
+```
 
 ## Requirements
 In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project has been tested with Python versions from 3.5.3 to 3.9, and it may also work with 3.10 (though it has not been tested).
