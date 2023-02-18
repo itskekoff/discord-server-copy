@@ -46,6 +46,7 @@ It will be create new guild using "name_syntax" that you defined in config.json
 ## Requirements
 In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project has been tested with Python versions from 3.5.3 to 3.9, and it may also work with 3.10 (though it has not been tested).
 Using discord.py 1.7.3
+
 ## Contribution
 When submitting a pull request:
 - Clone the repo.
