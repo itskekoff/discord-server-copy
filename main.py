@@ -46,22 +46,28 @@ class Configuration:
 config_path = "config.json"
 
 data: Configuration = Configuration(config_path)
+default_config: dict = {
+    "token": "Your discord account token",
+    "prefix": "cp!",
+    "clone_settings": {
+        "name_syntax": "%original-copy",
+        "clone_delay": 0.85,
+        "icon": True,
+        "roles": True,
+        "channels": True,
+        "permissions": True,
+        "emoji": True,
+    },
+    "clone_messages": {
+        "enabled": True,
+        "webhooks_clear": True,
+        "limit": 50,
+        "delay": 0.65
+    }
+}
 if not file_exists(config_path):
     # write default config
-    data.write_dict(
-        {
-            "token": "Your discord account token",
-            "prefix": "cp!",
-            "clone_settings": {
-                "name_syntax": "%original%-copy",
-                "icon": True,
-                "roles": True,
-                "channels": True,
-                "permissions": True,
-                "emoji": True,
-            }
-        }
-    ).flush()
+    data.write_dict(default_config).flush()
     print("* Configuration doesn't found. Re-created it.")
     sys.exit(0)
 
@@ -70,14 +76,22 @@ if not file_exists(config_path):
 token: str = data.read("token")
 prefix: str = data.read("prefix")
 
+
 clone_settings: dict = data.read("clone_settings")
 
 name_syntax: str = clone_settings["name_syntax"]
+clone_delay: float = clone_settings["clone_delay"]
 clone_icon: bool = clone_settings["icon"]  # icon also enables banner clone
 clone_roles: bool = clone_settings["roles"]
 clone_channels: bool = clone_settings["channels"]
 clone_permissions: bool = clone_settings["permissions"]
 clone_emojis: bool = clone_settings["emoji"]
+
+messages_settings: dict = data.read("clone_messages")
+clone_messages: bool = messages_settings["enabled"]
+webhooks_clear: bool = messages_settings["webhooks_clear"]
+messages_limit: int = messages_settings["limit"]
+messages_delay: float = messages_settings["delay"]
 
 if clone_channels and not clone_roles and clone_permissions:
     copy_roles = True  # we can't clone permissions if roles is not cloned
@@ -90,14 +104,17 @@ bot = commands.Bot(command_prefix=prefix,
 class ServerCopy:
     def __init__(self, from_guild: discord.Guild,
                  to_guild: discord.Guild, delay: float = 1,
-                 debug: bool = True):
+                 webhook_delay: float = 0.65, debug: bool = True):
         self.guild = from_guild
         self.new_guild = to_guild
         self.delay = delay
+        self.webhook_delay = webhook_delay
         self.debug = debug
 
         # creating flat mappings
-        self.mappings = {"roles": {}, "categories": {}}
+        # webhooks: {webhook: {original, new, url}}
+        self.mappings = {"roles": {}, "categories": {},
+                         "webhooks": {}, "channels": {}}
 
     async def clear_server(self):
         print("* Preparing guild to process...")
@@ -173,6 +190,8 @@ class ServerCopy:
                                                                        topic=channel.topic,
                                                                        slowmode_delay=channel.slowmode_delay,
                                                                        nsfw=channel.nsfw)
+                # add channel to mappings for webhook message copier
+                self.mappings["channels"][channel] = new_channel
                 if overwrites:
                     await new_channel.edit(overwrites=overwrites)
                 if self.debug:
@@ -213,6 +232,31 @@ class ServerCopy:
             await self.new_guild.create_custom_emoji(name=emoji.name, image=await emoji.url.read())
         await asyncio.sleep(self.delay)
 
+    async def clone_messages(self, limit: int = 50, clear: bool = True):
+        print("* Processing message clone with limit for channel: " + str(limit))
+
+        def get_key(value: typing.Any, my_dict: dict) -> typing.Any:
+            return list(my_dict.keys())[list(my_dict.values()).index(value)]
+
+        # EXPERIMENTAL: may cause rate limits, bans or other random shit.
+        # use at your own risk
+        for channel in self.mappings["channels"].values():
+            webhook: discord.Webhook = await channel.create_webhook(name="billy")
+            if self.debug:
+                print("* Created webhook in #" + channel.name)
+            self.mappings["webhooks"][webhook] = {get_key(channel, self.mappings["channels"]): channel}
+            # fill with messages
+            async for message in get_key(channel, self.mappings["channels"]).history(limit=limit):
+                author: discord.User = message.author
+                await webhook.send(content=message.content, avatar_url=author.avatar_url,
+                                   username=author.name)
+                await asyncio.sleep(self.webhook_delay)
+            if clear:
+                # delete webhook
+                if self.debug:
+                    print("* Deleted webhook in #" + channel.name)
+                await webhook.delete()
+
 
 @bot.event
 async def on_ready():
@@ -228,7 +272,7 @@ async def copy(ctx: commands.Context):
     guild: discord.Guild = ctx.guild
     new_guild: discord.Guild = await bot.create_guild(name=name_syntax.replace("%original", guild.name))
     cloner: ServerCopy = ServerCopy(from_guild=guild, to_guild=new_guild,
-                                    delay=0.85)
+                                    delay=clone_delay, webhook_delay=messages_delay)
     print("* Processing modules")
     await cloner.clear_server()
     if clone_icon:
@@ -240,6 +284,8 @@ async def copy(ctx: commands.Context):
         await cloner.clone_channels(perms=clone_permissions)
     if clone_emojis:
         await cloner.clone_emojis()
+    if clone_messages:
+        await cloner.clone_messages(limit=messages_limit, clear=webhooks_clear)
     print("* Done")
 
 
