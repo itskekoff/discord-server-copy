@@ -2,11 +2,12 @@
 This project allows you to clone one Discord server to another.
 
 ## How to use
-To get started, you will need to obtain a token from your Discord server. This can be done by running the following command in the browser console:
+To get started, you will need to obtain a token from your Discord account. This can be done by running the following command in the browser console:
 
 ```javascript
 (webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken()
 ```
+Note: you need to login in discord from browser
 
 Now run start.bat, it will be create config.json:
 ```json
