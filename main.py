@@ -94,7 +94,7 @@ messages_limit: int = messages_settings["limit"]
 messages_delay: float = messages_settings["delay"]
 
 if clone_channels and not clone_roles and clone_permissions:
-    copy_roles = True  # we can't clone permissions if roles is not cloned
+    clone_roles = True  # we can't clone permissions if roles is not cloned
     data.write_kv(key="roles", value=True).flush()
 
 bot = commands.Bot(command_prefix=prefix,
@@ -316,5 +316,5 @@ async def copy(ctx: commands.Context):
     print("* Done")
 
 
-Updater("1.1.8")
+Updater("1.1.9")
 bot.run(token, bot=False)
