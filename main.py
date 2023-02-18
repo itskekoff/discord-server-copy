@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import typing
+import urllib.request
 
 import discord
 from discord.ext import commands
@@ -98,6 +99,19 @@ if clone_channels and not clone_roles and clone_permissions:
 
 bot = commands.Bot(command_prefix=prefix,
                    self_bot=True)
+
+
+class Updater:
+    def __init__(self, version: str):
+        def check():
+            resp = urllib.request.urlopen(
+                url="https://raw.githubusercontent.com/itskekoff/discord-server-copy/main/main.py").read()
+            target_version = resp[resp.find('Updater('):]
+            if version in target_version:
+                print("* Updates doesn't found.")
+            else:
+                print("* Update available. Recommend to download it.")
+        check()
 
 
 class ServerCopy:
@@ -297,5 +311,7 @@ async def copy(ctx: commands.Context):
         await cloner.clone_messages(limit=messages_limit, clear=webhooks_clear)
     print("* Done")
 
+
+Updater("1.1.5")
 
 bot.run(token, bot=False)
