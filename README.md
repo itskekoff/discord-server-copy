@@ -1,6 +1,8 @@
 # Discord Server cloner
 This project allows you to clone one Discord server to another.
 
+**Note: using selfbots against the [ToS](https://support.discord.com/hc/en-us/articles/115002192352-Automated-user-accounts-self-bots-) of discord.**
+
 ## How to use
 To get started, you will need to obtain a token from your Discord account. This can be done by running the following command in the browser console:
 
