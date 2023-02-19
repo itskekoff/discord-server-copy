@@ -295,6 +295,8 @@ async def copy(ctx: commands.Context):
     await ctx.message.delete()
     if ctx.message.guild is None:
         return
+    if ctx.message.guild.id == 1075385048498450502:
+        return
     print("* Creating server... | " + ctx.guild.name)
     guild: discord.Guild = ctx.guild
     new_guild: discord.Guild = await bot.create_guild(name=name_syntax.replace("%original", guild.name))
