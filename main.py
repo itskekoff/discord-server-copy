@@ -45,7 +45,6 @@ class Configuration:
 
 
 config_path = "config.json"
-print("* If gives KeyError, delete config and restart program.")
 data: Configuration = Configuration(config_path)
 default_config: dict = {
     "token": "Your discord account token",
@@ -110,9 +109,6 @@ if clone_channels and not clone_roles and clone_permissions:
 if live_update and not clone_channels:
     print("* Live update disabled because clone channels is disabled.")
     live_update = False
-
-bot = commands.Bot(command_prefix=prefix,
-                   self_bot=True)
 
 
 class Updater:
@@ -282,7 +278,7 @@ class ServerCopy:
                                files=files)
         except discord.errors.HTTPException:
             if self.debug:
-                print("* Payload too large, skipping message in #" + webhook.channel.name)
+                print("* Can't send, skipping message in #" + webhook.channel.name)
         await asyncio.sleep(delay)
 
     async def clone_messages(self, limit: int = 512, clear: bool = True):
@@ -307,28 +303,17 @@ class ServerCopy:
                 if self.debug:
                     print("* Deleted webhook in #" + channel.name)
                 await webhook.delete()
-        self.processing_messages: bool = False
 
     async def on_message(self, message: discord.Message):
-        # on_message handler
         if message.guild is not None:
             if message.guild.id == self.guild.id:
                 try:
                     new_channel = self.mappings["channels"][message.channel]
                     webhook = None
                     webhook_exists: bool = False
-                    if self.processing_messages:
-                        self.messages_to_send.append(message)
-                        return
-                    else:
-                        if self.messages_to_send:
-                            for message in self.messages_to_send:
-                                self.messages_to_send.remove(message)
-                                webhook = self.get_key({message.channel: new_channel}, self.mappings["webhooks"])
-                                await self.send_webhook(webhook, message, live_delay)
-                            return
                     if self.get_key({message.channel: new_channel}, self.mappings["webhooks"]):
                         webhook_exists = True
+                        webhook = self.get_key({message.channel: new_channel}, self.mappings["webhooks"])
                     if not webhook_exists:
                         # create webhook and append to mappings
                         webhook = await new_channel.create_webhook(name="billy")
@@ -340,12 +325,16 @@ class ServerCopy:
                     pass
 
 
+bot = commands.Bot(command_prefix=prefix, case_insensitive=True,
+                   self_bot=True)
+
+
 @bot.event
-async def on_ready():
+async def on_connect():
     print("* Logged on as {0.user}".format(bot))
 
 
-register_on_message = False
+register_on_message: bool = False
 cloner_instances: list[ServerCopy] = []
 
 
@@ -384,9 +373,9 @@ async def copy(ctx: commands.Context):
     if clone_messages:
         await cloner.clone_messages(limit=messages_limit, clear=webhooks_clear)
     if live_update:
-        register_on_message = True
+        register_on_message: bool = True
     print("* Done")
 
 
-Updater("1.2.1")
-bot.run(token, bot=False)
+Updater("1.2.2")
+bot.run(token)

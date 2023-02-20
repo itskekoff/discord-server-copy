@@ -1,7 +1,7 @@
 # Discord Server cloner
 This project allows you to clone one Discord server to another.
 
-**Note: using selfbots against the [ToS](https://support.discord.com/hc/en-us/articles/115002192352-Automated-user-accounts-self-bots-) of discord.**
+**Note: using self-bots against the [ToS](https://support.discord.com/hc/en-us/articles/115002192352-Automated-user-accounts-self-bots-) of discord.**
 
 ## Features
 ```diff
@@ -36,7 +36,7 @@ After that, new guild will be created using "name_syntax" that you defined in co
 
 ## Requirements
 In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project has been tested with Python versions from 3.5.3 to 3.9, and it may also work with 3.10 (though it has not been tested).
-Using discord.py 1.7.3
+Using discord.py-self package.
 
 ## Contribution
 When submitting a pull request:
