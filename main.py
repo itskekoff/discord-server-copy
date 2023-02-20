@@ -139,6 +139,8 @@ class ServerCopy:
         self.webhook_delay = webhook_delay
         self.debug = debug
 
+        self.processing_messages = False
+        self.messages_to_send: list[discord.Message] = []
         # creating flat mappings
         # webhooks: {webhook: {original, new, url}}
         self.mappings = {"roles": {}, "categories": {},
@@ -267,8 +269,25 @@ class ServerCopy:
             await self.new_guild.create_custom_emoji(name=emoji.name, image=await emoji.url.read())
         await asyncio.sleep(self.delay)
 
+    async def send_webhook(self, webhook: discord.Webhook, message: discord.Message,
+                           delay: float = 0.85):
+        author: discord.User = message.author
+        files = []
+        if message.attachments is not None:
+            for attachment in message.attachments:
+                files.append(await attachment.to_file())
+        try:
+            await webhook.send(content=message.content, avatar_url=author.avatar_url,
+                               username=author.name + "#" + author.discriminator, embeds=message.embeds,
+                               files=files)
+        except discord.errors.HTTPException:
+            if self.debug:
+                print("* Payload too large, skipping message in #" + webhook.channel.name)
+        await asyncio.sleep(delay)
+
     async def clone_messages(self, limit: int = 512, clear: bool = True):
         print("* Processing message clone with limit for channel: " + str(limit))
+        self.processing_messages: bool = True
         for channel in self.mappings["channels"].values():
             webhook: discord.Webhook = await channel.create_webhook(name="billy")
             original_channel: discord.TextChannel = self.get_key(channel, self.mappings["channels"])
@@ -279,19 +298,7 @@ class ServerCopy:
             try:
                 for message in reversed(await original_channel.history(limit=limit).flatten()):
                     self.mappings["messages"][message] = original_channel
-                    author: discord.User = message.author
-                    files = []
-                    if message.attachments is not None:
-                        for attachment in message.attachments:
-                            files.append(await attachment.to_file())
-                    try:
-                        await webhook.send(content=message.content, avatar_url=author.avatar_url,
-                                           username=author.name + "#" + author.discriminator, embeds=message.embeds,
-                                           files=files)
-                    except discord.errors.HTTPException:
-                        if self.debug:
-                            print("* Payload too large, skipping message in #" + original_channel.name)
-                    await asyncio.sleep(self.webhook_delay)
+                    await self.send_webhook(webhook, message, self.webhook_delay)
             except discord.errors.Forbidden:
                 if self.debug:
                     print("* Missing access for channel: #" + original_channel.name)
@@ -300,6 +307,7 @@ class ServerCopy:
                 if self.debug:
                     print("* Deleted webhook in #" + channel.name)
                 await webhook.delete()
+        self.processing_messages: bool = False
 
     async def on_message(self, message: discord.Message):
         # on_message handler
@@ -309,6 +317,16 @@ class ServerCopy:
                     new_channel = self.mappings["channels"][message.channel]
                     webhook = None
                     webhook_exists: bool = False
+                    if self.processing_messages:
+                        self.messages_to_send.append(message)
+                        return
+                    else:
+                        if self.messages_to_send:
+                            for message in self.messages_to_send:
+                                self.messages_to_send.remove(message)
+                                webhook = self.get_key({message.channel: new_channel}, self.mappings["webhooks"])
+                                await self.send_webhook(webhook, message, live_delay)
+                            return
                     if self.get_key({message.channel: new_channel}, self.mappings["webhooks"]):
                         webhook_exists = True
                     if not webhook_exists:
@@ -317,19 +335,7 @@ class ServerCopy:
                         if self.debug:
                             print("* Created webhook in #" + new_channel.name)
                         self.mappings["webhooks"][webhook] = {message.channel: new_channel}
-                    author: discord.User = message.author
-                    files = []
-                    if message.attachments is not None:
-                        for attachment in message.attachments:
-                            files.append(await attachment.to_file())
-                    try:
-                        await webhook.send(content=message.content, avatar_url=author.avatar_url,
-                                           username=author.name + "#" + author.discriminator, embeds=message.embeds,
-                                           files=files)
-                    except discord.errors.HTTPException:
-                        if self.debug:
-                            print("* Payload too large, skipping message in #" + new_channel.name)
-                    await asyncio.sleep(self.webhook_delay)
+                    await self.send_webhook(webhook, message, live_delay)
                 except KeyError:
                     pass
 
@@ -382,5 +388,5 @@ async def copy(ctx: commands.Context):
     print("* Done")
 
 
-Updater("1.2.0")
+Updater("1.2.1")
 bot.run(token, bot=False)
