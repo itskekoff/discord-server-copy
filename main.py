@@ -60,10 +60,16 @@ default_config: dict = {
         "emoji": True,
     },
     "clone_messages": {
-        "enabled": True,
+        "__comment__": "Clone messages in all channels (last messages). Long limit - long time need to copy",
+        "enabled": False,
         "webhooks_clear": True,
-        "limit": 50,
+        "limit": 8196,
         "delay": 0.65
+    },
+    "live_update": {
+        "__comment__": "Automatically detect new messages and send it via webhook",
+        "enabled": False,
+        "message_delay": 0.75
     }
 }
 if not file_exists(config_path):
@@ -93,9 +99,17 @@ webhooks_clear: bool = messages_settings["webhooks_clear"]
 messages_limit: int = messages_settings["limit"]
 messages_delay: float = messages_settings["delay"]
 
+live_settings: dict = data.read("live_update")
+live_update: bool = live_settings["enabled"]
+live_delay: float = live_settings["message_delay"]
+
 if clone_channels and not clone_roles and clone_permissions:
     clone_roles = True  # we can't clone permissions if roles is not cloned
     data.write_kv(key="roles", value=True).flush()
+
+if live_update and not clone_channels:
+    print("* Live update disabled because clone channels is disabled.")
+    live_update = False
 
 bot = commands.Bot(command_prefix=prefix,
                    self_bot=True)
@@ -111,6 +125,7 @@ class Updater:
                 print("* Updates doesn't found.")
             else:
                 print("* Update available. Recommend to download it.")
+
         check()
 
 
@@ -128,6 +143,13 @@ class ServerCopy:
         # webhooks: {webhook: {original, new, url}}
         self.mappings = {"roles": {}, "categories": {},
                          "webhooks": {}, "channels": {}}
+
+    @staticmethod
+    def get_key(value: typing.Any, my_dict: dict) -> typing.Any:
+        try:
+            return list(my_dict.keys())[list(my_dict.values()).index(value)]
+        except ValueError:
+            return None
 
     async def clear_server(self):
         print("* Preparing guild to process...")
@@ -245,23 +267,18 @@ class ServerCopy:
             await self.new_guild.create_custom_emoji(name=emoji.name, image=await emoji.url.read())
         await asyncio.sleep(self.delay)
 
-    async def clone_messages(self, limit: int = 50, clear: bool = True):
+    async def clone_messages(self, limit: int = 512, clear: bool = True):
         print("* Processing message clone with limit for channel: " + str(limit))
-
-        def get_key(value: typing.Any, my_dict: dict) -> typing.Any:
-            return list(my_dict.keys())[list(my_dict.values()).index(value)]
-
-        # EXPERIMENTAL: may cause rate limits, bans or other random shit.
-        # use at your own risk
         for channel in self.mappings["channels"].values():
             webhook: discord.Webhook = await channel.create_webhook(name="billy")
-            original_channel: discord.TextChannel = get_key(channel, self.mappings["channels"])
+            original_channel: discord.TextChannel = self.get_key(channel, self.mappings["channels"])
             if self.debug:
                 print("* Created webhook in #" + channel.name)
             self.mappings["webhooks"][webhook] = {original_channel: channel}
             # fill with messages
             try:
                 for message in reversed(await original_channel.history(limit=limit).flatten()):
+                    self.mappings["messages"][message] = original_channel
                     author: discord.User = message.author
                     files = []
                     if message.attachments is not None:
@@ -284,24 +301,69 @@ class ServerCopy:
                     print("* Deleted webhook in #" + channel.name)
                 await webhook.delete()
 
+    async def on_message(self, message: discord.Message):
+        # on_message handler
+        if message.guild is not None:
+            if message.guild.id == self.guild.id:
+                try:
+                    new_channel = self.mappings["channels"][message.channel]
+                    webhook = None
+                    webhook_exists: bool = False
+                    if self.get_key({message.channel: new_channel}, self.mappings["webhooks"]):
+                        webhook_exists = True
+                    if not webhook_exists:
+                        # create webhook and append to mappings
+                        webhook = await new_channel.create_webhook(name="billy")
+                        if self.debug:
+                            print("* Created webhook in #" + new_channel.name)
+                        self.mappings["webhooks"][webhook] = {message.channel: new_channel}
+                    author: discord.User = message.author
+                    files = []
+                    if message.attachments is not None:
+                        for attachment in message.attachments:
+                            files.append(await attachment.to_file())
+                    try:
+                        await webhook.send(content=message.content, avatar_url=author.avatar_url,
+                                           username=author.name + "#" + author.discriminator, embeds=message.embeds,
+                                           files=files)
+                    except discord.errors.HTTPException:
+                        if self.debug:
+                            print("* Payload too large, skipping message in #" + new_channel.name)
+                    await asyncio.sleep(self.webhook_delay)
+                except KeyError:
+                    pass
+
 
 @bot.event
 async def on_ready():
     print("* Logged on as {0.user}".format(bot))
 
 
-@bot.command(name="copy", aliases=["clone", "paste"])
+register_on_message = False
+cloner_instances: list[ServerCopy] = []
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    if register_on_message:
+        if cloner_instances is not None:
+            for instance in cloner_instances:
+                await instance.on_message(message=message)
+    await bot.process_commands(message=message)
+
+
+@bot.command(name="copy", aliases=["clone", "paste", "parse"])
 async def copy(ctx: commands.Context):
+    global cloner_instances, register_on_message
     await ctx.message.delete()
     if ctx.message.guild is None:
-        return
-    if ctx.message.guild.id == 1075385048498450502:
         return
     print("* Creating server... | " + ctx.guild.name)
     guild: discord.Guild = ctx.guild
     new_guild: discord.Guild = await bot.create_guild(name=name_syntax.replace("%original", guild.name))
     cloner: ServerCopy = ServerCopy(from_guild=guild, to_guild=new_guild,
                                     delay=clone_delay, webhook_delay=messages_delay)
+    cloner_instances.append(cloner)
     print("* Processing modules")
     await cloner.clear_server()
     if clone_icon:
@@ -315,8 +377,10 @@ async def copy(ctx: commands.Context):
         await cloner.clone_emojis()
     if clone_messages:
         await cloner.clone_messages(limit=messages_limit, clear=webhooks_clear)
+    if live_update:
+        register_on_message = True
     print("* Done")
 
 
-Updater("1.1.9")
+Updater("1.2.0")
 bot.run(token, bot=False)

@@ -13,7 +13,8 @@ This project allows you to clone one Discord server to another.
 + Server Emojis
 + Server Settings 
 + Server Messages
-- Server Members
++ Update server messages in real time
+- Server Members / Bots
 - Server Stickers
 ```
 
