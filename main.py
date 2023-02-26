@@ -1,6 +1,7 @@
 # -*- encoding: utf-8 -*-
 
 import asyncio
+import datetime
 import json
 import os
 import sys
@@ -272,9 +273,12 @@ class ServerCopy:
         if message.attachments is not None:
             for attachment in message.attachments:
                 files.append(await attachment.to_file())
+        now = datetime.datetime.now()
+        current_time = now.strftime('%d/%m/%Y %H:%M')
+        name: str = f"{author.name}#{author.discriminator} at {current_time}"
         try:
             await webhook.send(content=message.content, avatar_url=author.avatar_url,
-                               username=author.name + "#" + author.discriminator, embeds=message.embeds,
+                               username=name, embeds=message.embeds,
                                files=files)
         except discord.errors.HTTPException:
             if self.debug:
@@ -334,8 +338,8 @@ async def on_connect():
     print("* Logged on as {0.user}".format(bot))
 
 
-register_on_message: bool = False
-cloner_instances: list[ServerCopy] = []
+register_on_message = False
+cloner_instances = []
 
 
 @bot.event
@@ -373,7 +377,7 @@ async def copy(ctx: commands.Context):
     if clone_messages:
         await cloner.clone_messages(limit=messages_limit, clear=webhooks_clear)
     if live_update:
-        register_on_message: bool = True
+        register_on_message = True
     print("* Done")
 
 
