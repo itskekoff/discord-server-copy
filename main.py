@@ -236,9 +236,9 @@ class ServerCopy:
 
             elif isinstance(channel, discord.VoiceChannel):
                 # if voice channel, create voice channel
+                bitrate = channel.bitrate if channel.bitrate <= 96000 else None
                 new_channel = await self.new_guild.create_voice_channel(name=channel.name, position=channel.position,
-                                                                        bitrate=channel.bitrate,
-                                                                        user_limit=channel.user_limit)
+                                                                        bitrate=bitrate, user_limit=channel.user_limit)
                 if overwrites:
                     await new_channel.edit(overwrites=overwrites)
                 if self.debug:
@@ -381,5 +381,5 @@ async def copy(ctx: commands.Context):
     print("* Done")
 
 
-Updater("1.2.2")
+Updater("1.2.3")
 bot.run(token)
