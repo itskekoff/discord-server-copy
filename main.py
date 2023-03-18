@@ -141,7 +141,8 @@ class ServerCopy:
         # creating flat mappings
         # webhooks: {webhook: {original, new, url}}
         self.mappings = {"roles": {}, "categories": {},
-                         "webhooks": {}, "channels": {}}
+                         "webhooks": {}, "channels": {},
+                         "messages": {}}
 
     @staticmethod
     def get_key(value: typing.Any, my_dict: dict) -> typing.Any:
@@ -382,5 +383,5 @@ async def copy(ctx: commands.Context, server_id: int = None):
     print("* Done")
 
 
-Updater("1.2.4")
+Updater("1.2.5")
 bot.run(token)
