@@ -256,7 +256,7 @@ class ServerCopy:
                 if channel.category is not None:
                     # if channel category is not none, edit new channel category.
                     await new_channel.edit(category=self.mappings["categories"][channel.category])
-        await asyncio.sleep(self.delay)
+            await asyncio.sleep(self.delay)
 
     async def clone_emojis(self):
         print("* Processing emoji clone")
@@ -383,5 +383,5 @@ async def copy(ctx: commands.Context, server_id: int = None):
     print("* Done")
 
 
-Updater("1.2.5")
+Updater("1.2.6")
 bot.run(token)
