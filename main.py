@@ -265,7 +265,7 @@ class ServerCopy:
                 print("* " + str(emoji.id) + " | " + emoji.name)
             # cloning emoji using same name and url
             await self.new_guild.create_custom_emoji(name=emoji.name, image=await emoji.url.read())
-        await asyncio.sleep(self.delay)
+            await asyncio.sleep(self.delay)
 
     async def send_webhook(self, webhook: discord.Webhook, message: discord.Message,
                            delay: float = 0.85):
@@ -383,5 +383,5 @@ async def copy(ctx: commands.Context, server_id: int = None):
     print("* Done")
 
 
-Updater("1.2.6")
+Updater("1.2.7")
 bot.run(token)
