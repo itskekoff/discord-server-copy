@@ -1,5 +1,5 @@
 # Discord Server cloner
-This project allows you to clone one Discord server to another.
+This project allows you to copy (clone) one discord server to another discord server without getting banned.
 
 **Note: using self-bots against the [ToS](https://support.discord.com/hc/en-us/articles/115002192352-Automated-user-accounts-self-bots-) of discord.**
 
