@@ -7,6 +7,7 @@ import os
 import sys
 import typing
 import urllib.request
+import configparser
 
 import discord
 from discord.ext import commands
@@ -73,12 +74,13 @@ default_config: dict = {
     }
 }
 if not file_exists(config_path):
-    # write default config
     data.write_dict(default_config).flush()
     print("* Configuration doesn't found. Re-created it.")
     sys.exit(0)
 
 # loading parameters
+register_on_message = False
+cloner_instances = []
 
 token: str = data.read("token")
 prefix: str = data.read("prefix")
@@ -121,7 +123,7 @@ class Updater:
             if version.encode("utf-8") in target_version:
                 print("* Updates doesn't found.")
             else:
-                print("* Update available. Recommend to download it.")
+                print("* Update available.")
 
         check()
 
@@ -339,20 +341,15 @@ async def on_connect():
     print("* Logged on as {0.user}".format(bot))
 
 
-register_on_message = False
-cloner_instances = []
-
-
 @bot.event
 async def on_message(message: discord.Message):
-    if register_on_message:
-        if cloner_instances is not None:
-            for instance in cloner_instances:
-                await instance.on_message(message=message)
-    await bot.process_commands(message=message)
+    if register_on_message and cloner_instances:
+        for instance in cloner_instances:
+            await instance.on_message(message=message)
+    await bot.process_commands(message)
 
 
-@bot.command(name="copy", aliases=["clone", "paste", "parse"])
+@bot.command(name="copy", aliases=["clone", "paste", "parse", "start"])
 async def copy(ctx: commands.Context, server_id: int = None):
     global cloner_instances, register_on_message
     await ctx.message.delete()
@@ -383,5 +380,5 @@ async def copy(ctx: commands.Context, server_id: int = None):
     print("* Done")
 
 
-Updater("1.2.7")
+Updater("1.2.8")
 bot.run(token)
