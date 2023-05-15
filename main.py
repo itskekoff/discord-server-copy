@@ -353,12 +353,12 @@ async def on_message(message: discord.Message):
 async def copy(ctx: commands.Context, server_id: int = None):
     global cloner_instances, register_on_message
     await ctx.message.delete()
-    guild: discord.Guild = bot.get_guild(id=server_id) if server_id else ctx.message.guild
+    guild: discord.Guild = bot.get_guild(server_id) if server_id else ctx.message.guild
     if guild is None and server_id is None:
         return
 
     print("* Creating server... | " + guild.name)
-    new_guild: discord.Guild = await bot.create_guild(name=name_syntax.replace("%original", guild.name))
+    new_guild: discord.Guild = await bot.create_guild(name_syntax.replace("%original", guild.name))
     cloner: ServerCopy = ServerCopy(from_guild=guild, to_guild=new_guild,
                                     delay=clone_delay, webhook_delay=messages_delay)
     cloner_instances.append(cloner)
@@ -380,5 +380,5 @@ async def copy(ctx: commands.Context, server_id: int = None):
     print("* Done")
 
 
-Updater("1.2.8")
+Updater("1.2.9")
 bot.run(token)
