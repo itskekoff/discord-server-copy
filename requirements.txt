@@ -1,1 +1,1 @@
-discord.py-self
+discord.py-self==1.9.2
