@@ -87,7 +87,7 @@ default_config: dict = {
         "roles": True,
         "channels": True,
         "overwrites": True,
-        "emoji": True,
+        "emoji": False,
     },
     "clone_messages": {
         "__comment__": "Clone messages in all channels (last messages). Long limit - long time need to copy",
