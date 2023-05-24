@@ -16,6 +16,7 @@ This project allows you to copy (clone) one discord server to another discord se
 + Update server messages in real time
 - Server Members / Bots
 - Server Stickers
+- Forum channels
 ```
 
 ## How to use
@@ -43,7 +44,7 @@ After that, new guild will be created using "name_syntax" that you defined in co
 "name_syntax" supports only "%original" parameter
 
 ## Requirements
-In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project has been tested with Python versions from 3.5.3 to 3.9, and it may also work with 3.10 (though it has not been tested).
+In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project requires Python versions from 3.8 to 3.11
 Using discord.py-self package.
 
 ## Contribution

@@ -1,1 +1,2 @@
 discord.py-self
+loguru
