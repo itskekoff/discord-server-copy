@@ -25,10 +25,10 @@ To get started, you will need to obtain a token from your Discord account. This 
 ```javascript
 (webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken()
 ```
+
 Note: you need to login in discord from browser
 
 Now run start.bat, configuration will be created. Configure it and re-run start.bat
-If script gives KeyError, save token and delete config.json, then configure again. If issue persist, open [issue](https://github.com/itskekoff/discord-server-copy/issues/new) with "bug" label
 
 Type in any guild: cp!clone (or copy, paste, parse). "cp!" is prefix that you defined in config.json
 
@@ -44,8 +44,8 @@ After that, new guild will be created using "name_syntax" that you defined in co
 "name_syntax" supports only "%original" parameter
 
 ## Requirements
-In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project requires Python versions from 3.8 to 3.11
-Using discord.py-self package.
+1. In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project requires Python versions from 3.8 to 3.11
+2. Using discord.py-self package.
 
 ## Contribution
 When submitting a pull request:
