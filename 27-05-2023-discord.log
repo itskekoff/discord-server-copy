@@ -1,0 +1,30 @@
+2023-05-27 17:39:25,197 | INFO | Logging in using static token.
+2023-05-27 17:39:26,303 | INFO | Found user agent Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36, build number 199933.
+2023-05-27 17:39:28,885 | INFO | Connected to Gateway (Session ID: 02786e085e68b4fe4299e609a72aa300).
+2023-05-27 17:39:29,000 | WARNING | Member list scraping failed for 1018134604051394660 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 17:39:29,000 | WARNING | Member list scraping failed for 1058380535262617716 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 17:39:29,000 | WARNING | Member list scraping failed for 995647102598262796 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 17:45:26,302 | ERROR | Ignoring exception in command copy
+Traceback (most recent call last):
+  File "D:\PycharmProjects\discord-server-copy\venv\lib\site-packages\discord\ext\commands\core.py", line 236, in wrapped
+    ret = await coro(*args, **kwargs)
+  File "D:\PycharmProjects\discord-server-copy\main.py", line 392, in copy
+    await cloner.clone_channels(perms=clone_overwrites)
+  File "D:\PycharmProjects\discord-server-copy\main.py", line 269, in clone_channels
+    new_channel = await self.new_guild.create_stage_channel(name=channel.name,
+  File "D:\PycharmProjects\discord-server-copy\venv\lib\site-packages\discord\guild.py", line 1726, in create_stage_channel
+    data = await self._create_channel(
+  File "D:\PycharmProjects\discord-server-copy\venv\lib\site-packages\discord\http.py", line 838, in request
+    raise HTTPException(response, data)
+discord.errors.HTTPException: 400 Bad Request (error code: 50024): Cannot execute action on this channel type
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\PycharmProjects\discord-server-copy\venv\lib\site-packages\discord\ext\commands\bot.py", line 1169, in invoke
+    await ctx.command.invoke(ctx)
+  File "D:\PycharmProjects\discord-server-copy\venv\lib\site-packages\discord\ext\commands\core.py", line 1020, in invoke
+    await injected(*ctx.args, **ctx.kwargs)  # type: ignore
+  File "D:\PycharmProjects\discord-server-copy\venv\lib\site-packages\discord\ext\commands\core.py", line 245, in wrapped
+    raise CommandInvokeError(exc) from exc
+discord.ext.commands.errors.CommandInvokeError: Command raised an exception: HTTPException: 400 Bad Request (error code: 50024): Cannot execute action on this channel type

@@ -241,40 +241,30 @@ class ServerCopy:
                     if isinstance(role, discord.Role):
                         overwrites[self.mappings["roles"][role]] = permissions
             if isinstance(channel, discord.TextChannel):
-                new_channel: discord.TextChannel = await self.new_guild.create_text_channel(name=channel.name,
-                                                                                            position=channel.position,
-                                                                                            topic=channel.topic,
-                                                                                            slowmode_delay=channel.slowmode_delay,
-                                                                                            nsfw=channel.nsfw,
-                                                                                            category=
-                                                                                            self.mappings["categories"][
-                                                                                                channel.category],
-                                                                                            overwrites=overwrites
-                                                                                            )
+                new_channel = await self.new_guild.create_text_channel(name=channel.name,
+                                                                       position=channel.position,
+                                                                       topic=channel.topic,
+                                                                       slowmode_delay=channel.slowmode_delay,
+                                                                       nsfw=channel.nsfw,
+                                                                       category=
+                                                                       self.mappings["categories"][
+                                                                           channel.category],
+                                                                       overwrites=overwrites)
                 self.mappings["channels"][channel] = new_channel
                 if self.debug:
                     logger.debug("Created text channel " + str(channel.id) + " | " + new_channel.name)
             elif isinstance(channel, discord.VoiceChannel):
                 bitrate = channel.bitrate if channel.bitrate <= 96000 else None
-                new_channel: discord.VoiceChannel = await self.new_guild.create_voice_channel(name=channel.name,
-                                                                                              position=channel.position,
-                                                                                              bitrate=bitrate,
-                                                                                              user_limit=channel.user_limit,
-                                                                                              category=self.mappings[
-                                                                                                  "categories"][
-                                                                                                  channel.category],
-                                                                                              overwrites=overwrites)
+                new_channel = await self.new_guild.create_voice_channel(name=channel.name,
+                                                                        position=channel.position,
+                                                                        bitrate=bitrate,
+                                                                        user_limit=channel.user_limit,
+                                                                        category=self.mappings[
+                                                                            "categories"][
+                                                                            channel.category],
+                                                                        overwrites=overwrites)
                 if self.debug:
                     logger.debug("Created voice channel " + str(channel.id) + " | " + new_channel.name)
-            elif isinstance(channel, discord.StageChannel):
-                new_channel: discord.StageChannel = await self.new_guild.create_stage_channel(name=channel.name,
-                                                                                              position=channel.position,
-                                                                                              category=self.mappings[
-                                                                                                  "categories"][
-                                                                                                  channel.category],
-                                                                                              overwrites=overwrites)
-                if self.debug:
-                    logger.debug("Created stage channel " + str(channel.id) + " | " + new_channel.name)
             await asyncio.sleep(self.delay)
 
     async def clone_emojis(self):
@@ -399,7 +389,7 @@ async def copy(ctx: commands.Context, server_id: int = None):
 
 if __name__ == '__main__':
     LoggerSetup(debug_enabled=debug)
-    Updater("1.3.0")
+    Updater("1.3.1")
     file_handler = logging.FileHandler(f'{datetime.now().strftime("%d-%m-%Y")}-discord.log')
     file_handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')

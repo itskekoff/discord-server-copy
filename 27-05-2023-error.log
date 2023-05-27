@@ -1,0 +1,14 @@
+2023-05-27 15:40:12,622 | INFO | Logging in using static token.
+2023-05-27 15:40:14,517 | INFO | Found user agent Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36, build number 199933.
+2023-05-27 15:40:17,990 | INFO | Connected to Gateway (Session ID: 87c134269dcb42197cd683d7b3799718).
+2023-05-27 15:40:18,094 | WARNING | Member list scraping failed for 1111981887838244934 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 15:40:18,094 | WARNING | Member list scraping failed for 1018134604051394660 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 15:40:18,094 | WARNING | Member list scraping failed for 1058380535262617716 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 15:40:18,094 | WARNING | Member list scraping failed for 995647102598262796 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 15:43:12,366 | INFO | Logging in using static token.
+2023-05-27 15:43:12,996 | INFO | Found user agent Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36, build number 199933.
+2023-05-27 15:43:15,437 | INFO | Connected to Gateway (Session ID: 8af13203148cf7cdd9d59dd6ae54fa1c).
+2023-05-27 15:43:15,534 | WARNING | Member list scraping failed for 1018134604051394660 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 15:43:15,534 | WARNING | Member list scraping failed for 1058380535262617716 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 15:43:15,534 | WARNING | Member list scraping failed for 995647102598262796 (Failed to automatically choose channels; please specify them manually).
+2023-05-27 15:43:15,535 | WARNING | Member list scraping failed for 1111982092176330774 (Failed to automatically choose channels; please specify them manually).
