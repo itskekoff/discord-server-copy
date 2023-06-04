@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import os
-import random
 import sys
 import time
 import typing
@@ -13,7 +12,6 @@ from datetime import datetime
 
 import discord
 from discord.ext import commands
-
 from loguru import logger
 
 
@@ -235,6 +233,7 @@ class ServerCopy:
 
     async def clone_channels(self, perms: bool = True):
         for channel in self.guild.channels:
+            category = self.mappings.get("categories", {}).get(channel.category, None)
             overwrites: dict = {}
             if perms:
                 for role, permissions in channel.overwrites.items():
@@ -246,9 +245,7 @@ class ServerCopy:
                                                                        topic=channel.topic,
                                                                        slowmode_delay=channel.slowmode_delay,
                                                                        nsfw=channel.nsfw,
-                                                                       category=
-                                                                       self.mappings["categories"][
-                                                                           channel.category],
+                                                                       category=category,
                                                                        overwrites=overwrites)
                 self.mappings["channels"][channel] = new_channel
                 if self.debug:
@@ -259,9 +256,7 @@ class ServerCopy:
                                                                         position=channel.position,
                                                                         bitrate=bitrate,
                                                                         user_limit=channel.user_limit,
-                                                                        category=self.mappings[
-                                                                            "categories"][
-                                                                            channel.category],
+                                                                        category=category,
                                                                         overwrites=overwrites)
                 if self.debug:
                     logger.debug("Created voice channel " + str(channel.id) + " | " + new_channel.name)
@@ -389,7 +384,7 @@ async def copy(ctx: commands.Context, server_id: int = None):
 
 if __name__ == '__main__':
     LoggerSetup(debug_enabled=debug)
-    Updater("1.3.1")
+    Updater("1.3.2")
     file_handler = logging.FileHandler(f'{datetime.now().strftime("%d-%m-%Y")}-discord.log')
     file_handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
