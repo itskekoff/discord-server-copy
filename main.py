@@ -78,9 +78,11 @@ default_config: dict = {
     "token": "Your discord account token",
     "prefix": "cp!",
     "debug": True,
+    "new_server_id": 0,
     "clone_settings": {
         "name_syntax": "%original-copy",
         "clone_delay": 0.85,
+        "clear_guild": True,
         "icon": True,
         "roles": True,
         "channels": True,
@@ -114,11 +116,13 @@ try:
     token: str = data.read("token")
     prefix: str = data.read("prefix")
     debug: bool = data.read("debug")
+    new_server_id: int = data.read("new_server_id")
 
     clone_settings: dict = data.read("clone_settings")
 
     name_syntax: str = clone_settings["name_syntax"]
     clone_delay: float = clone_settings["clone_delay"]
+    clear_guild: bool = clone_settings["clear_guild"]
     clone_icon: bool = clone_settings["icon"]
     clone_roles: bool = clone_settings["roles"]
     clone_channels: bool = clone_settings["channels"]
@@ -352,15 +356,25 @@ async def copy(ctx: commands.Context, server_id: int = None):
     if guild is None and server_id is None:
         return
     start_time = time.time()
-    logger.info("Creating server...")
-    new_guild: discord.Guild = await bot.create_guild(name_syntax.replace("%original", guild.name))
+
+    if bot.get_guild(new_server_id) is None:
+        logger.info("Creating server...")
+        try:
+            new_guild: discord.Guild = await bot.create_guild(name_syntax.replace("%original", guild.name))
+        except:
+            logger.error("Unable to create server automaticly. Сreate it yourself and enter its id in the config \"new_server_id\"")
+    else:
+        logger.info("Getting server...")
+        new_guild: discord.Guild = bot.get_guild(new_server_id)
+        
     cloner: ServerCopy = ServerCopy(from_guild=guild, to_guild=new_guild,
                                     delay=clone_delay, webhook_delay=messages_delay
                                     )
     cloner_instances.append(cloner)
     logger.info("Processing modules")
-    logger.info("Preparing guild to process...")
-    await cloner.prepare_server()
+    if clear_guild:
+        logger.info("Preparing guild to process...")
+        await cloner.prepare_server()
     if clone_icon:
         logger.info("Cloning server icon...")
         await cloner.clone_icon()
