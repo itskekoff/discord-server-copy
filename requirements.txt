@@ -1,2 +1,2 @@
-discord.py-self
-loguru
+git+https://github.com/dolfies/discord.py-self
+asyncdiscord
