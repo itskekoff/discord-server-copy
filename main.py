@@ -362,11 +362,12 @@ async def copy(ctx: commands.Context, server_id: int = None):
         try:
             new_guild: discord.Guild = await bot.create_guild(name_syntax.replace("%original", guild.name))
         except:
-            logger.error("Unable to create server automaticly. Сreate it yourself and enter its id in the config \"new_server_id\"")
+            logger.error(
+                "Unable to create server automaticly. Сreate it yourself and enter its id in the config \"new_server_id\"")
     else:
         logger.info("Getting server...")
         new_guild: discord.Guild = bot.get_guild(new_server_id)
-        
+
     cloner: ServerCopy = ServerCopy(from_guild=guild, to_guild=new_guild,
                                     delay=clone_delay, webhook_delay=messages_delay
                                     )
@@ -398,7 +399,7 @@ async def copy(ctx: commands.Context, server_id: int = None):
 
 if __name__ == '__main__':
     LoggerSetup(debug_enabled=debug)
-    Updater("1.3.2")
+    Updater("1.3.3")
     file_handler = logging.FileHandler(f'{datetime.now().strftime("%d-%m-%Y")}-discord.log')
     file_handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
