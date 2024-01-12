@@ -44,9 +44,10 @@ After that, new guild will be created using "name_syntax" that you defined in co
 "name_syntax" supports only "%original" parameter
 
 ## Requirements
-1. In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project requires Python versions from 3.8 to 3.11
-2. Using discord.py-self package.
-
+1. In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project requires Python versions from 3.8 to 3.11 (tested versions)
+2. Using discord.py-self package (delete discord.py if you are not using virtual env (venv).
+3. Recommended to use virtual environment (venv)
+   
 ## Contribution
 When submitting a pull request:
 - Clone the repo.
