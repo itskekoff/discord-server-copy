@@ -84,7 +84,6 @@ default_config: dict = {
     "token": "Your discord account token",
     "prefix": "cp!",
     "debug": True,
-    "new_server_id": 0,
     "clone_settings": {
         "name_syntax": "%original-copy",
         "clone_delay": 1.337,
@@ -125,8 +124,6 @@ try:
     debug: bool = data.read("debug")
 
     LoggerSetup(debug_enabled=debug)
-
-    new_server_id: int = data.read("new_server_id")
 
     clone_settings: dict = data.read("clone_settings")
 
@@ -294,7 +291,7 @@ class ServerCopy:
                                                                        default_thread_slowmode_delay=channel.default_thread_slowmode_delay)
                 self.mappings["channels"][channel] = new_channel
                 if self.debug:
-                    logger.debug("Created text channel {} | {}".format(new_channel.name, str(channel.id)))
+                    logger.debug("Created text channel #{} | {}".format(new_channel.name, str(channel.id)))
             elif isinstance(channel, discord.VoiceChannel):
                 bitrate = self.get_bitrate(channel)
                 new_channel = await self.new_guild.create_voice_channel(name=channel.name,
@@ -305,7 +302,7 @@ class ServerCopy:
                                                                         overwrites=overwrites)
                 self.mappings["channels"][channel] = new_channel
                 if self.debug:
-                    logger.debug("Created voice channel {} | {}".format(new_channel.name, str(channel.id)))
+                    logger.debug("Created voice channel #{} | {}".format(new_channel.name, str(channel.id)))
             await asyncio.sleep(self.delay)
 
     async def process_community(self):
@@ -361,7 +358,7 @@ class ServerCopy:
                                                                             default_thread_slowmode_delay=channel.default_thread_slowmode_delay,
                                                                             available_tags=tags)
                     if self.debug:
-                        logger.debug("Created forum channel {} | {}".format(new_channel.name, str(channel.id)))
+                        logger.debug("Created forum channel #{} | {}".format(new_channel.name, str(channel.id)))
                 if isinstance(channel, discord.StageChannel):
                     bitrate = self.get_bitrate(channel)
                     new_channel = await self.new_guild.create_stage_channel(name=channel.name,
@@ -374,7 +371,7 @@ class ServerCopy:
                                                                             overwrites=overwrites)
 
                     if self.debug:
-                        logger.debug("Created stage channel {} | {}".format(new_channel.name, str(channel.id)))
+                        logger.debug("Created stage channel #{} | {}".format(new_channel.name, str(channel.id)))
                 await asyncio.sleep(self.delay)
 
     async def clone_emojis(self):
@@ -422,7 +419,7 @@ class ServerCopy:
                                username=name, embeds=message.embeds,
                                files=files)
             if self.debug:
-                logger.debug("Cloned message from {}: {}".format(author.name, message.content))
+                logger.debug("Cloned message from @{}: {}".format(author.name, message.content))
         except discord.errors.HTTPException:
             if self.debug:
                 logger.debug("Can't send, skipping message in #{}".format(webhook.channel.name))
@@ -486,7 +483,7 @@ async def on_message(message: discord.Message):
 
 
 @bot.command(name="copy", aliases=["clone", "paste", "parse", "start"])
-async def copy(ctx: commands.Context, server_id: int = None):
+async def copy(ctx: commands.Context, server_id: int = None, *, args: str = ""):
     global cloner_instances, register_on_message
     await ctx.message.delete()
 
@@ -495,6 +492,16 @@ async def copy(ctx: commands.Context, server_id: int = None):
         return
 
     start_time = time.time()
+
+    new_server_id = 0
+    for arg in args.split():
+        if arg.startswith("new_server="):
+            try:
+                new_server_id = int(arg.split("=")[1])
+            except ValueError:
+                logger.error("Invalid new server id format (required - int, provided - shit)")
+                return
+            break
 
     if bot.get_guild(new_server_id) is None:
         logger.info("Creating server...")
