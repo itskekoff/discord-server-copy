@@ -37,9 +37,9 @@ The main thing is just to go to the server.
 Example commands:
 
 * cp!clone - Copy the server in which the command was executed.
-* cp!clone 0 - Copy the server whose ID was specified.
-* cp!clone new_server=0 - Copy the server in specified server id
-* cp!clone 0 new_server=0 - Copy the server whose ID was specified but in new server that specified.
+* cp!clone id=0 - Copy the server whose ID was specified.
+* cp!clone new=0 - Copy the server in specified server id
+* cp!clone id=0 new=0 - Copy the server whose ID was specified but in new server that specified.
 
 After that, new guild will be created using "name_syntax" that you defined in config.json
 "name_syntax" supports only "%original" parameter

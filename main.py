@@ -19,7 +19,7 @@ from discord.ext import commands
 from loguru import logger
 from PIL import Image, ImageSequence
 
-VERSION = "1.3.5"
+VERSION = "1.3.6"
 
 
 class LoggerSetup:
@@ -187,7 +187,8 @@ class Updater:
 class ServerCopy:
     def __init__(self, from_guild: discord.Guild,
                  to_guild: discord.Guild, delay: float = 1,
-                 webhook_delay: float = 0.65, debug_enabled: bool = True):
+                 webhook_delay: float = 0.65, debug_enabled: bool = True,
+                 live_update_toggled: bool = False):
         self.guild = from_guild
         self.new_guild = to_guild
         self.delay = delay
@@ -195,12 +196,13 @@ class ServerCopy:
         self.debug = debug_enabled
 
         self.enabled_community = False
-
         self.processing_messages = False
+
+        self.live_update = live_update_toggled
         self.messages_to_send: list[discord.Message] = []
         self.mappings = {"roles": {}, "categories": {},
                          "webhooks": {}, "channels": {},
-                         "emojis": {}, "messages": {}}
+                         "emojis": {}, "processed_channels": {}}
 
     @staticmethod
     def get_key(value: typing.Any, my_dict: dict) -> typing.Any:
@@ -419,14 +421,15 @@ class ServerCopy:
                                username=name, embeds=message.embeds,
                                files=files)
             if self.debug:
-                logger.debug("Cloned message from @{}: {}".format(author.name, message.content))
-        except discord.errors.HTTPException:
+                logger.debug("Cloned message from @{}{}".format(author.name, ": {}".format(
+                    message.content) if message.content else ""))
+        except discord.errors.HTTPException as e:
             if self.debug:
                 logger.debug("Can't send, skipping message in #{}".format(webhook.channel.name))
         await asyncio.sleep(delay)
 
     async def clone_messages(self, limit: int = 512, clear: bool = True):
-        self.processing_messages: bool = True
+        self.processing_messages = True
         for channel in self.mappings["channels"].values():
             webhook: discord.Webhook = await channel.create_webhook(name="bot by itskekoff")
             original_channel: discord.TextChannel = self.get_key(channel, self.mappings["channels"])
@@ -435,32 +438,37 @@ class ServerCopy:
             self.mappings["webhooks"][webhook] = {original_channel: channel}
             try:
                 async for message in original_channel.history(limit=limit, oldest_first=True):
-                    self.mappings["messages"][message] = original_channel
                     await self.send_webhook(webhook, message, self.webhook_delay)
+                self.mappings["processed_channels"][original_channel] = channel
             except discord.errors.Forbidden:
                 if self.debug:
                     logger.debug("Missing access for channel: #{}".format(original_channel.name))
             if clear:
+                await webhook.delete()
                 if self.debug:
                     logger.debug("Deleted webhook in #{}".format(channel.name))
-                await webhook.delete()
+                del self.mappings["webhooks"][webhook]
+        self.processing_messages = False
 
     async def on_message(self, message: discord.Message):
         if message.guild is not None:
             if message.guild.id == self.guild.id:
                 try:
-                    new_channel = self.mappings["channels"][message.channel]
-                    webhook = None
-                    webhook_exists: bool = False
-                    if self.get_key({message.channel: new_channel}, self.mappings["webhooks"]):
-                        webhook_exists = True
-                        webhook = self.get_key({message.channel: new_channel}, self.mappings["webhooks"])
-                    if not webhook_exists:
-                        webhook = await new_channel.create_webhook(name="billy")
-                        if self.debug:
-                            logger.debug("Created webhook in #{}".format(new_channel.name))
-                        self.mappings["webhooks"][webhook] = {message.channel: new_channel}
-                    await self.send_webhook(webhook, message, live_delay)
+                    if self.live_update:
+                        if self.processing_messages and message.channel in self.mappings["processed_channels"] or \
+                                not self.processing_messages:
+                            new_channel = self.mappings["channels"][message.channel]
+                            webhook = None
+                            webhook_exists: bool = False
+                            if self.get_key({message.channel: new_channel}, self.mappings["webhooks"]):
+                                webhook_exists = True
+                                webhook = self.get_key({message.channel: new_channel}, self.mappings["webhooks"])
+                            if not webhook_exists:
+                                webhook = await new_channel.create_webhook(name="billy")
+                                if self.debug:
+                                    logger.debug("Created webhook in #{}".format(new_channel.name))
+                                self.mappings["webhooks"][webhook] = {message.channel: new_channel}
+                            await self.send_webhook(webhook, message, live_delay)
                 except KeyError:
                     pass
 
@@ -476,32 +484,30 @@ async def on_connect():
 
 @bot.event
 async def on_message(message: discord.Message):
-    if register_on_message and cloner_instances:
+    if cloner_instances:
         for instance in cloner_instances:
             await instance.on_message(message=message)
     await bot.process_commands(message)
 
 
 @bot.command(name="copy", aliases=["clone", "paste", "parse", "start"])
-async def copy(ctx: commands.Context, server_id: int = None, *, args: str = ""):
+async def copy(ctx: commands.Context, *, args: str = ""):
     global cloner_instances, register_on_message
     await ctx.message.delete()
-
-    guild: discord.Guild = bot.get_guild(server_id) if server_id else ctx.message.guild
+    server_id: int | None = None
+    new_server_id: int | None = None
+    for arg in args.split():
+        key_value = arg.split("=") if "=" in arg else (arg, None)
+        key, value = key_value
+        if key == "new" and value.isdigit():
+            new_server_id = int(value)
+        elif key == "id" and value.isdigit():
+            server_id = int(value)
+    guild: discord.Guild = bot.get_guild(server_id) if server_id else ctx.guild
     if guild is None and server_id is None:
         return
 
     start_time = time.time()
-
-    new_server_id = 0
-    for arg in args.split():
-        if arg.startswith("new_server="):
-            try:
-                new_server_id = int(arg.split("=")[1])
-            except ValueError:
-                logger.error("Invalid new server id format (required - int, provided - shit)")
-                return
-            break
 
     if bot.get_guild(new_server_id) is None:
         logger.info("Creating server...")
@@ -509,7 +515,7 @@ async def copy(ctx: commands.Context, server_id: int = None, *, args: str = ""):
             new_guild: discord.Guild = await bot.create_guild(name_syntax.replace("%original", guild.name))
         except discord.HTTPException:
             logger.error(
-                "Unable to create server automatically. Create it yourself and enter its id in the config \"new_server_id\"")
+                "Unable to create server automatically. Create it yourself and run command with \"new=id\" argument")
             return
     else:
         logger.info("Getting server...")
@@ -519,8 +525,8 @@ async def copy(ctx: commands.Context, server_id: int = None, *, args: str = ""):
         logger.error("Can't create server. Maybe account invalid or requires captcha?")
         return
     cloner: ServerCopy = ServerCopy(from_guild=guild, to_guild=new_guild,
-                                    delay=clone_delay, webhook_delay=messages_delay
-                                    )
+                                    delay=clone_delay, webhook_delay=messages_delay,
+                                    live_update_toggled=live_update)
     cloner_instances.append(cloner)
     logger.info("Processing modules")
     if clear_guild:
