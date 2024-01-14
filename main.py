@@ -19,7 +19,7 @@ from discord.ext import commands
 from loguru import logger
 from PIL import Image, ImageSequence
 
-VERSION = "1.3.4"
+VERSION = "1.3.5"
 
 
 class LoggerSetup:
