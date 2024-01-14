@@ -19,7 +19,7 @@ from discord.ext import commands
 from loguru import logger
 from PIL import Image, ImageSequence
 
-VERSION = "1.3.5"
+VERSION = "1.3.4"
 
 
 class LoggerSetup:
@@ -254,7 +254,7 @@ class ServerCopy:
                                                         permissions=role.permissions)
             self.mappings["roles"][role] = new_role
             if self.debug:
-                logger.debug("Created role: {} | {}".format(str(new_role.id), new_role.name))
+                logger.debug("Created role: {} | {}".format(new_role.name, str(new_role.id)))
             await asyncio.sleep(self.delay)
 
     async def clone_categories(self, perms: bool = True):
