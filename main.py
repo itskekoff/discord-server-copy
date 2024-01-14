@@ -3,21 +3,23 @@
 import asyncio
 import json
 import logging
+import re
+import io
 import os
 import sys
 import time
 import typing
 import urllib.request
+
 from datetime import datetime
+from packaging import version
 
 import discord
 from discord.ext import commands
 from loguru import logger
+from PIL import Image, ImageSequence
 
-
-def file_exists(file_path: str):
-    # check if file exists
-    return os.path.exists(file_path)
+VERSION = "1.3.4"
 
 
 class LoggerSetup:
@@ -39,10 +41,14 @@ class Configuration:
         self.config_file_path = config_file_path
         self.config = {}
         self._default_config = {}
-        if file_exists(config_file_path):
+        if self.file_exists(config_file_path):
             with open(self.config_file_path, "r") as config_file_object:
                 self.config = json.load(config_file_object)
                 config_file_object.close()
+
+    @staticmethod
+    def file_exists(file_path: str):
+        return os.path.exists(file_path)
 
     def read(self, key: typing.Any) -> typing.Any:
         if key not in self.config:
@@ -81,13 +87,14 @@ default_config: dict = {
     "new_server_id": 0,
     "clone_settings": {
         "name_syntax": "%original-copy",
-        "clone_delay": 0.85,
+        "clone_delay": 1.337,
         "clear_guild": True,
         "icon": True,
         "roles": True,
         "channels": True,
         "overwrites": True,
         "emoji": False,
+        "stickers": False
     },
     "clone_messages": {
         "__comment__": "Clone messages in all channels (last messages). Long limit - long time need to copy",
@@ -104,7 +111,7 @@ default_config: dict = {
 }
 data.set_default(default_config)
 
-if not file_exists(config_path):
+if not data.file_exists(config_path):
     data.write_defaults().flush()
     logger.error("Configuration doesn't found. Re-created it.")
     sys.exit(0)
@@ -116,6 +123,9 @@ try:
     token: str = data.read("token")
     prefix: str = data.read("prefix")
     debug: bool = data.read("debug")
+
+    LoggerSetup(debug_enabled=debug)
+
     new_server_id: int = data.read("new_server_id")
 
     clone_settings: dict = data.read("clone_settings")
@@ -128,10 +138,11 @@ try:
     clone_channels: bool = clone_settings["channels"]
     clone_overwrites: bool = clone_settings["overwrites"]
     clone_emojis: bool = clone_settings["emoji"]
+    clone_stickers: bool = clone_settings["stickers"]
 
     messages_settings: dict = data.read("clone_messages")
     clone_messages: bool = messages_settings["enabled"]
-    webhooks_clear: bool = messages_settings["webhooks_clear"]
+    messages_webhook_clear: bool = messages_settings["webhooks_clear"]
     messages_limit: int = messages_settings["limit"]
     messages_delay: float = messages_settings["delay"]
 
@@ -148,26 +159,32 @@ except KeyError:
     data.write(key="token", value=token).flush()
     logger.error("Something is wrong with configuration. Re-created it with saved token (if present).")
     logger.error("Restart the program to continue.")
-    sys.exit(0)
+    sys.exit(-1)
 
-if clone_channels and not clone_roles and clone_overwrites:
+if clone_channels and (not clone_roles and clone_overwrites):
     clone_roles = True
-    data.write(key="roles", value=True).flush()
+    logger.warning("Clone roles enabled because clone overwrites and channels are enabled.")
 
 if live_update and not clone_channels:
-    logger.error("* Live update disabled because clone channels is disabled.")
+    logger.error("Live update disabled because clone channels is disabled.")
     live_update = False
+
+if clone_messages and (messages_limit <= 0):
+    clone_messages = False
+    logger.warning("Messages disabled because its limit is zero.")
 
 
 class Updater:
-    def __init__(self, version: str):
+    def __init__(self):
         resp = urllib.request.urlopen(
             url="https://raw.githubusercontent.com/itskekoff/discord-server-copy/main/main.py").read()
-        target_version = resp[resp.find(b'Updater('):]
-        if version.encode("utf-8") in target_version:
-            logger.info("Updates doesn't found.")
-        else:
+        target_version_string = resp.decode("utf-8")
+        target_version = re.search(r'VERSION\s+=\s+\"([^\"]+)\"', target_version_string).group(1)
+
+        if version.parse(VERSION) < version.parse(target_version):
             logger.warning("Update available. Download it from github.")
+        else:
+            logger.info("No updates found.")
 
 
 class ServerCopy:
@@ -180,11 +197,13 @@ class ServerCopy:
         self.webhook_delay = webhook_delay
         self.debug = debug_enabled
 
+        self.enabled_community = False
+
         self.processing_messages = False
         self.messages_to_send: list[discord.Message] = []
         self.mappings = {"roles": {}, "categories": {},
                          "webhooks": {}, "channels": {},
-                         "messages": {}}
+                         "emojis": {}, "messages": {}}
 
     @staticmethod
     def get_key(value: typing.Any, my_dict: dict) -> typing.Any:
@@ -193,16 +212,36 @@ class ServerCopy:
         except ValueError:
             return None
 
+    @staticmethod
+    def get_bitrate(channel: discord.channel.VocalGuildChannel) -> int | None:
+        return channel.bitrate if channel.bitrate <= 96000 else None
+
+    @staticmethod
+    async def get_first_frame(image: discord.Asset):
+        image_bytes = await image.read()
+        if image.is_animated():
+            img = Image.open(io.BytesIO(image_bytes))
+            frames = [frame.copy() for frame in ImageSequence.Iterator(img)]
+            first_frame = frames[0]
+            byte_arr = io.BytesIO()
+            first_frame.save(byte_arr, format='PNG')
+            return byte_arr.getvalue()
+        else:
+            return image_bytes
+
     async def prepare_server(self):
         for channel in await self.new_guild.fetch_channels():
             await channel.delete()
 
+        if 'COMMUNITY' in self.guild.features:
+            self.enabled_community = True
+            logger.warning("Community mode is toggled. Will be set up after channel cloning (if enabled).")
+
     async def clone_icon(self):
         if self.guild.icon is not None:
-            await self.new_guild.edit(icon=await self.guild.icon.read())
-            if self.guild.banner is not None:
-                await self.new_guild.edit(banner=await self.guild.banner.read())
-            await asyncio.sleep(self.delay)
+            icon_bytes = await self.get_first_frame(self.guild.icon)
+            await self.new_guild.edit(icon=icon_bytes)
+        await asyncio.sleep(self.delay)
 
     async def clone_roles(self):
         roles_create = []
@@ -218,7 +257,7 @@ class ServerCopy:
                                                         permissions=role.permissions)
             self.mappings["roles"][role] = new_role
             if self.debug:
-                logger.debug("Created role: " + str(new_role.id) + " | " + new_role.name)
+                logger.debug("Created role: {} | {}".format(str(new_role.id), new_role.name))
             await asyncio.sleep(self.delay)
 
     async def clone_categories(self, perms: bool = True):
@@ -232,7 +271,7 @@ class ServerCopy:
                                                                 overwrites=overwrites)
             self.mappings["categories"][category] = new_category
             if self.debug:
-                logger.debug("Created category: " + str(new_category.id) + " | " + new_category.name)
+                logger.debug("Created category: {} | {}".format(new_category.name, str(new_category.id)))
             await asyncio.sleep(self.delay)
 
     async def clone_channels(self, perms: bool = True):
@@ -250,28 +289,124 @@ class ServerCopy:
                                                                        slowmode_delay=channel.slowmode_delay,
                                                                        nsfw=channel.nsfw,
                                                                        category=category,
-                                                                       overwrites=overwrites)
+                                                                       overwrites=overwrites,
+                                                                       default_auto_archive_duration=channel.default_auto_archive_duration,
+                                                                       default_thread_slowmode_delay=channel.default_thread_slowmode_delay)
                 self.mappings["channels"][channel] = new_channel
                 if self.debug:
-                    logger.debug("Created text channel " + str(channel.id) + " | " + new_channel.name)
+                    logger.debug("Created text channel {} | {}".format(new_channel.name, str(channel.id)))
             elif isinstance(channel, discord.VoiceChannel):
-                bitrate = channel.bitrate if channel.bitrate <= 96000 else None
+                bitrate = self.get_bitrate(channel)
                 new_channel = await self.new_guild.create_voice_channel(name=channel.name,
                                                                         position=channel.position,
                                                                         bitrate=bitrate,
                                                                         user_limit=channel.user_limit,
                                                                         category=category,
                                                                         overwrites=overwrites)
+                self.mappings["channels"][channel] = new_channel
                 if self.debug:
-                    logger.debug("Created voice channel " + str(channel.id) + " | " + new_channel.name)
+                    logger.debug("Created voice channel {} | {}".format(new_channel.name, str(channel.id)))
             await asyncio.sleep(self.delay)
 
+    async def process_community(self):
+        if self.enabled_community:
+            afk_channel = None
+            try:
+                afk_channel = self.mappings["channels"][self.guild.afk_channel]
+            except KeyError:
+                pass
+            await self.new_guild.edit(
+                community=True,
+                verification_level=self.guild.verification_level,
+                default_notifications=self.guild.default_notifications,
+                afk_channel=afk_channel,
+                afk_timeout=self.guild.afk_timeout,
+                system_channel=self.mappings["channels"][self.guild.system_channel],
+                system_channel_flags=self.guild.system_channel_flags,
+                rules_channel=self.mappings["channels"][self.guild.rules_channel],
+                public_updates_channel=self.mappings["channels"][self.guild.public_updates_channel],
+                explicit_content_filter=self.guild.explicit_content_filter,
+                preferred_locale=self.guild.preferred_locale, )
+            logger.info("Updated guild community settings")
+            await asyncio.sleep(clone_delay)
+
+    async def add_community_channels(self, perms: bool = True):
+        if self.enabled_community:
+            all_channels = []
+            for channel in self.guild.channels:
+                if isinstance(channel, (discord.ForumChannel, discord.StageChannel)):
+                    all_channels.append(channel)
+            for channel in all_channels:
+                category = self.mappings.get("categories", {}).get(channel.category, None)
+                overwrites: dict = {}
+                if perms and channel.overwrites:
+                    for role, permissions in channel.overwrites.items():
+                        if isinstance(role, discord.Role):
+                            overwrites[self.mappings["roles"][role]] = permissions
+                if isinstance(channel, discord.ForumChannel):
+                    tags: discord.abc.Sequence[discord.ForumTag] = channel.available_tags
+                    for tag in tags:
+                        if tag.emoji.id:
+                            tag.emoji = self.mappings["emojis"].get(tag.emoji, None)
+
+                    new_channel = await self.new_guild.create_forum_channel(name=channel.name,
+                                                                            topic=channel.topic,
+                                                                            position=channel.position,
+                                                                            category=category,
+                                                                            slowmode_delay=channel.slowmode_delay,
+                                                                            nsfw=channel.nsfw,
+                                                                            overwrites=overwrites,
+                                                                            default_layout=channel.default_layout,
+                                                                            default_auto_archive_duration=channel.default_auto_archive_duration,
+                                                                            default_thread_slowmode_delay=channel.default_thread_slowmode_delay,
+                                                                            available_tags=tags)
+                    if self.debug:
+                        logger.debug("Created forum channel {} | {}".format(new_channel.name, str(channel.id)))
+                if isinstance(channel, discord.StageChannel):
+                    bitrate = self.get_bitrate(channel)
+                    new_channel = await self.new_guild.create_stage_channel(name=channel.name,
+                                                                            category=category,
+                                                                            position=channel.position,
+                                                                            bitrate=bitrate,
+                                                                            user_limit=channel.user_limit,
+                                                                            rtc_region=channel.rtc_region,
+                                                                            video_quality_mode=channel.video_quality_mode,
+                                                                            overwrites=overwrites)
+
+                    if self.debug:
+                        logger.debug("Created stage channel {} | {}".format(new_channel.name, str(channel.id)))
+                await asyncio.sleep(self.delay)
+
     async def clone_emojis(self):
-        for emoji in self.guild.emojis:
+        emoji_limit = min(self.new_guild.emoji_limit, 45)
+        for emoji in self.guild.emojis[:emoji_limit]:
+            if len(self.new_guild.emojis) >= emoji_limit:
+                logger.warning("Emoji limit reached. Skipping...")
+                break
+            new_emoji = await self.new_guild.create_custom_emoji(name=emoji.name, image=await emoji.read())
+            self.mappings["emojis"][emoji] = new_emoji
             if self.debug:
-                logger.debug("Created emoji: " + str(emoji.id) + " | " + emoji.name)
-            await self.new_guild.create_custom_emoji(name=emoji.name, image=await emoji.read())
+                logger.debug("Created emoji: {} | {}".format(new_emoji.name, str(new_emoji.id)))
             await asyncio.sleep(self.delay)
+
+    async def clone_stickers(self):
+        sticker_limit = self.new_guild.sticker_limit
+        created_stickers = 0
+        for sticker in self.guild.stickers:
+            if created_stickers < sticker_limit:
+                try:
+                    await self.new_guild.create_sticker(name=sticker.name,
+                                                        description=sticker.description,
+                                                        emoji=sticker.emoji,
+                                                        file=await sticker.to_file())
+                    created_stickers += 1
+                    if self.debug:
+                        logger.debug("Created sticker: {} | {}".format(sticker.name, sticker.id))
+                except discord.NotFound:
+                    logger.warning("Can't create sticker with id {}, url: {}".format(sticker.id, sticker.url))
+                await asyncio.sleep(self.delay)
+            else:
+                break
 
     async def send_webhook(self, webhook: discord.Webhook, message: discord.Message,
                            delay: float = 0.85):
@@ -286,15 +421,17 @@ class ServerCopy:
             await webhook.send(content=message.content, avatar_url=author.display_avatar.url,
                                username=name, embeds=message.embeds,
                                files=files)
+            if self.debug:
+                logger.debug("Cloned message from {}: {}".format(author.name, message.content))
         except discord.errors.HTTPException:
             if self.debug:
-                logger.debug("Can't send, skipping message in #" + webhook.channel.name)
+                logger.debug("Can't send, skipping message in #{}".format(webhook.channel.name))
         await asyncio.sleep(delay)
 
     async def clone_messages(self, limit: int = 512, clear: bool = True):
         self.processing_messages: bool = True
         for channel in self.mappings["channels"].values():
-            webhook: discord.Webhook = await channel.create_webhook(name="billy")
+            webhook: discord.Webhook = await channel.create_webhook(name="bot by itskekoff")
             original_channel: discord.TextChannel = self.get_key(channel, self.mappings["channels"])
             if self.debug:
                 logger.debug("Created webhook in #" + channel.name)
@@ -305,10 +442,10 @@ class ServerCopy:
                     await self.send_webhook(webhook, message, self.webhook_delay)
             except discord.errors.Forbidden:
                 if self.debug:
-                    logger.debug("Missing access for channel: #" + original_channel.name)
+                    logger.debug("Missing access for channel: #{}".format(original_channel.name))
             if clear:
                 if self.debug:
-                    logger.debug("Deleted webhook in #" + channel.name)
+                    logger.debug("Deleted webhook in #{}".format(channel.name))
                 await webhook.delete()
 
     async def on_message(self, message: discord.Message):
@@ -324,7 +461,7 @@ class ServerCopy:
                     if not webhook_exists:
                         webhook = await new_channel.create_webhook(name="billy")
                         if self.debug:
-                            logger.debug("Created webhook in #" + new_channel.name)
+                            logger.debug("Created webhook in #{}".format(new_channel.name))
                         self.mappings["webhooks"][webhook] = {message.channel: new_channel}
                     await self.send_webhook(webhook, message, live_delay)
                 except KeyError:
@@ -352,22 +489,28 @@ async def on_message(message: discord.Message):
 async def copy(ctx: commands.Context, server_id: int = None):
     global cloner_instances, register_on_message
     await ctx.message.delete()
+
     guild: discord.Guild = bot.get_guild(server_id) if server_id else ctx.message.guild
     if guild is None and server_id is None:
         return
+
     start_time = time.time()
 
     if bot.get_guild(new_server_id) is None:
         logger.info("Creating server...")
         try:
             new_guild: discord.Guild = await bot.create_guild(name_syntax.replace("%original", guild.name))
-        except:
+        except discord.HTTPException:
             logger.error(
-                "Unable to create server automaticly. Сreate it yourself and enter its id in the config \"new_server_id\"")
+                "Unable to create server automatically. Create it yourself and enter its id in the config \"new_server_id\"")
+            return
     else:
         logger.info("Getting server...")
         new_guild: discord.Guild = bot.get_guild(new_server_id)
 
+    if new_guild is None:
+        logger.error("Can't create server. Maybe account invalid or requires captcha?")
+        return
     cloner: ServerCopy = ServerCopy(from_guild=guild, to_guild=new_guild,
                                     delay=clone_delay, webhook_delay=messages_delay
                                     )
@@ -389,18 +532,25 @@ async def copy(ctx: commands.Context, server_id: int = None):
     if clone_emojis:
         logger.info("Cloning server emojis...")
         await cloner.clone_emojis()
+    if clone_stickers:
+        logger.info("Cloning stickers...")
+        await cloner.clone_stickers()
+    if cloner.enabled_community and clone_channels:
+        logger.info("Cloning community settings & additional channels...")
+        await cloner.process_community()
+        await cloner.add_community_channels(perms=clone_overwrites)
     if clone_messages:
         logger.info("Cloning server messages...")
-        await cloner.clone_messages(limit=messages_limit, clear=webhooks_clear)
+        await cloner.clone_messages(limit=messages_limit, clear=messages_webhook_clear)
     if live_update:
         register_on_message = True
     logger.success(f"Done in {round((time.time() - start_time), 2)} seconds.")
 
 
 if __name__ == '__main__':
-    LoggerSetup(debug_enabled=debug)
-    Updater("1.3.3")
+    Updater()
     file_handler = logging.FileHandler(f'{datetime.now().strftime("%d-%m-%Y")}-discord.log')
     file_handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+    logger.info("Logging in discord account...")
     bot.run(token, log_handler=file_handler, log_formatter=formatter)

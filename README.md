@@ -5,18 +5,17 @@ This project allows you to copy (clone) one discord server to another discord se
 
 ## Features
 ```diff
-+ Clone Channels
-+ Channel Permissions, Role permissions
-+ Server Roles
-+ Server Name
-+ Server Banner / Icon
-+ Server Emojis
-+ Server Settings 
-+ Server Messages
++ Server text, voice, stage & forum channels
++ Channel permissions, role permissions
++ Server roles
++ Server name
++ Server icon
++ Server emojis (45 emoji - limit)
++ Server stickers (free slots)
++ Server settings
++ Server messages
 + Update server messages in real time
-- Server Members / Bots
-- Server Stickers
-- Forum channels
+- Server members / bots
 ```
 
 ## How to use
@@ -44,7 +43,7 @@ After that, new guild will be created using "name_syntax" that you defined in co
 "name_syntax" supports only "%original" parameter
 
 ## Requirements
-1. In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project requires Python versions from 3.8 to 3.11 (tested versions)
+1. In order to use the Discord Server Cloner, you will need to have Python installed on your system. The project requires Python versions from 3.8 to 3.12 (tested versions)
 2. Using discord.py-self package (delete discord.py if you are not using virtual env (venv).
 3. Recommended to use virtual environment (venv)
    
