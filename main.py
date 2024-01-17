@@ -551,7 +551,7 @@ async def copy(ctx: commands.Context, *, args: str = ""):
     if bot.get_guild(new_server_id) is None:
         logger.info("Creating server...")
         try:
-            new_guild: discord.Guild = await bot.create_guild(name_syntax.replace("%original", guild.name))
+            new_guild: discord.Guild = await bot.create_guild(name_syntax.replace("%original%", guild.name))
         except discord.HTTPException:
             logger.error(
                 "Unable to create server automatically. Create it yourself and run command with \"new=id\" argument")
