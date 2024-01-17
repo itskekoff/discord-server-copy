@@ -85,7 +85,7 @@ default_config: dict = {
     "prefix": "cp!",
     "debug": True,
     "clone_settings": {
-        "name_syntax": "%original-copy",
+        "name_syntax": "%original%-copy",
         "clone_delay": 1.337,
         "clear_guild": True,
         "icon": True,
