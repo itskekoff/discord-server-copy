@@ -9,8 +9,8 @@ This project allows you to copy (clone) one discord server to another discord se
 + Channel permissions, role permissions
 + Server roles
 + Server name
-+ Server icon
-+ Server emojis (45 emoji - limit)
++ Server icon, banner (if new server have permissions)
++ Server emojis (-5 emojis from server limit)
 + Server stickers (free slots)
 + Server settings
 + Server messages
