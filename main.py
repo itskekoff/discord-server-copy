@@ -100,10 +100,11 @@ default_config: dict = {
     },
     "clone_messages": {
         "__comment__": "Clone messages in all channels (last messages). Long limit - long time need to copy",
-        "enabled": False,
+        "enabled": True,
         "__comment_use_queue__": "Clone messages using this scheme: (1 channel - 1 message, then 2 channel clones 1 message and etc)",
         "use_queue": True,
         "oldest_first": True,
+        "__comment_parallel__": "Clone messages for all channels (can be used with queue)",
         "parallel": True,
         "webhooks_clear": True,
         "limit": 8196,
@@ -111,6 +112,7 @@ default_config: dict = {
     },
     "live_update": {
         "__comment__": "Automatically detect new messages and send it via webhook",
+        "__comment_2__": "Also works with clone_messages (starts sending when channel is fully processed)",
         "enabled": False,
         "message_delay": 0.75
     }
