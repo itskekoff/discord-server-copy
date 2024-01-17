@@ -101,7 +101,7 @@ default_config: dict = {
     "clone_messages": {
         "__comment__": "Clone messages in all channels (last messages). Long limit - long time need to copy",
         "enabled": True,
-        "__comment_use_queue__": "Clone messages using this scheme: (1 channel - 1 message, then 2 channel clones 1 message and etc)",
+        "__comment_use_queue__": "Clone messages using queue for each channels and caches all messages before sending",
         "use_queue": True,
         "oldest_first": True,
         "__comment_parallel__": "Clone messages for all channels (can be used with queue)",
@@ -510,7 +510,13 @@ class ServerCopy:
 
     async def clone_messages(self, limit: int = 512, clear: bool = True):
         self.processing_messages = True
-        if self.clone_parallel:
+        if self.clone_parallel and self.clone_queue:
+            await self.populate_queue(limit)
+            if self.debug:
+                logger.debug(f"Collected {len(self.message_queue)} messages")
+            tasks = [self.clone_message(clear) for _ in range(limit)]
+            await asyncio.gather(*tasks)
+        elif self.clone_parallel:
             tasks = []
             for channel in self.mappings["channels"].values():
                 tasks.append(self.clone_channel_messages(channel, limit, clear))
@@ -519,6 +525,7 @@ class ServerCopy:
             await self.populate_queue(limit)
             tasks = [self.clone_message(clear) for _ in range(limit)]
             await asyncio.gather(*tasks)
+        self.message_queue.clear()
         self.processing_messages = False
 
     async def clone_channel_messages(self, channel, limit: int = 512, clear: bool = True):
