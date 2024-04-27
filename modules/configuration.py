@@ -1,7 +1,8 @@
 import json
 import os
+from functools import reduce
 
-from typing import Any, List
+from typing import Any, List, Dict, Tuple
 
 
 class Configuration:
@@ -56,3 +57,27 @@ class Configuration:
 
     def write_defaults(self):
         return self.write_dict(self._default_config)
+
+
+def check_missing_keys(
+        config_data: Configuration, default_data: dict, path: list = None
+) -> tuple[dict, list]:
+    if path is None:
+        path = []
+    missing_elements = []
+    updated_config = {}
+    for key, default in default_data.items():
+        if isinstance(default, dict):
+            if config_data.read(path + [key]) is None:
+                config_data.write(path + [key], default).flush()
+                missing_elements.append(key)
+            updated_config[key], missing_path_keys = check_missing_keys(
+                config_data, default, path + [key]
+            )
+            missing_elements += missing_path_keys
+        else:
+            if config_data.read(path + [key]) is None:
+                config_data.write(path + [key], default).flush()
+                missing_elements.append(key)
+            updated_config[key] = config_data.read(path + [key])
+    return updated_config, missing_elements

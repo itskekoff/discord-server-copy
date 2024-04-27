@@ -3,9 +3,13 @@ import io
 import typing
 
 from collections import deque
+from collections.abc import Sequence
 
 import discord
+from discord import CategoryChannel
+from discord.abc import GuildChannel
 
+import main
 from modules.logger import Logger
 
 from PIL import Image, ImageSequence
@@ -15,16 +19,15 @@ logger = Logger()
 
 class ServerCopy:
     def __init__(
-        self,
-        from_guild: discord.Guild,
-        to_guild: discord.Guild | None,
-        delay: float = 1,
-        webhook_delay: float = 0.65,
-        debug_enabled: bool = True,
-        live_update_toggled: bool = False,
-        enable_queue: bool = True,
-        enable_parallel: bool = False,
-        oldest_first: bool = True,
+            self,
+            from_guild: discord.Guild,
+            to_guild: discord.Guild | None,
+            delay: float = 1,
+            webhook_delay: float = 0.65,
+            debug_enabled: bool = True,
+            live_update_toggled: bool = False,
+            clone_messages_toggled: bool = False,
+            oldest_first: bool = True,
     ):
 
         self.guild = from_guild
@@ -33,9 +36,8 @@ class ServerCopy:
         self.webhook_delay = webhook_delay
         self.debug = debug_enabled
 
-        self.clone_queue = enable_queue
-        self.clone_parallel = enable_parallel
         self.clone_oldest_first = oldest_first
+        self.clone_messages_toggled = clone_messages_toggled
         self.live_update = live_update_toggled
 
         self.enabled_community = False
@@ -43,9 +45,6 @@ class ServerCopy:
 
         self.logger = Logger(debug_enabled=self.debug)
         self.logger.bind(server=self.guild.name, length=8)
-
-        self.channel_semaphore = asyncio.Semaphore(6)
-        self.message_semaphore = asyncio.Semaphore(12)
 
         self.message_queue = deque()
 
@@ -56,6 +55,7 @@ class ServerCopy:
             "channels": {},
             "emojis": {},
             "processed_channels": {},
+            "fetched_data": {"roles": [], "channels": Sequence[GuildChannel], "emojis": [], "stickers": []},
         }
 
     @staticmethod
@@ -90,6 +90,13 @@ class ServerCopy:
         else:
             return image_bytes
 
+    def find_webhook(self, channel_obj: GuildChannel) -> discord.Webhook | None:
+        for webhook, channel_to_webhook_mapping in self.mappings["webhooks"].items():
+            for channel_obj, matched_channel in channel_to_webhook_mapping.items():
+                if channel_obj == channel_obj:
+                    return webhook
+        return None
+
     def create_channel_log(self, channel_type: str, channel_name: str, channel_id: int):
         if self.debug:
             self.logger.debug(
@@ -111,17 +118,9 @@ class ServerCopy:
 
     async def populate_queue(self, limit: int = 512):
         for channel in self.mappings["channels"].values():
-            original_channel: discord.TextChannel = self.get_key(
-                channel, self.mappings["channels"]
-            )
-            async for message in original_channel.history(
-                limit=limit, oldest_first=self.clone_oldest_first
-            ):
+            original_channel: discord.TextChannel = self.get_key(channel, self.mappings["channels"])
+            async for message in original_channel.history(limit=limit, oldest_first=self.clone_oldest_first):
                 self.message_queue.append((channel, message))
-
-    async def semaphore_task(self, func, *args, **kwargs):
-        async with self.message_semaphore:
-            await func(*args, **kwargs)
 
     async def prepare_server(self):
         methods = [
@@ -150,6 +149,22 @@ class ServerCopy:
                 "Community mode is toggled. Will be set up after channel processing (if enabled)."
             )
 
+    async def fetch_required_data(self):
+        self.logger.info("Fetching all required data (this can take a few minutes)")
+
+        entities = ['roles', 'channels', 'emojis', 'stickers']
+        fetch_methods = {
+            'roles': self.guild.fetch_roles,
+            'channels': self.guild.fetch_channels,
+            'emojis': self.guild.fetch_emojis,
+            'stickers': self.guild.fetch_stickers
+        }
+
+        for entity in entities:
+            self.mappings["fetched_data"][entity] = await fetch_methods[entity]() if not getattr(self.guild,
+                                                                                                 entity) else getattr(
+                self.guild, entity)
+
     async def clone_icon(self):
         if self.guild.icon:
             icon_bytes = await self.get_first_frame(self.guild.icon)
@@ -159,8 +174,8 @@ class ServerCopy:
     async def clone_banner(self):
         if self.guild.banner and ("ANIMATED_BANNER" or "BANNER") in self.guild.features:
             if (
-                self.guild.banner.is_animated()
-                and "ANIMATED_BANNER" in self.guild.features
+                    self.guild.banner.is_animated()
+                    and "ANIMATED_BANNER" in self.guild.features
             ):
                 banner_bytes = await self.guild.banner.read()
             else:
@@ -171,7 +186,7 @@ class ServerCopy:
     async def clone_roles(self):
         roles_create = []
         role: discord.Role
-        for role in self.guild.roles:
+        for role in self.mappings["fetched_data"]["roles"]:
             if role.name != "@everyone":
                 roles_create.append(role)
             else:
@@ -193,7 +208,12 @@ class ServerCopy:
             await asyncio.sleep(self.delay)
 
     async def clone_categories(self, perms: bool = True):
-        for category in self.guild.categories:
+        categories = [
+            channel for channel in self.mappings["fetched_data"]["channels"]
+            if isinstance(channel, CategoryChannel)
+        ]
+
+        for category in categories:
             overwrites: dict = {}
             if perms:
                 for role, permissions in category.overwrites.items():
@@ -202,7 +222,7 @@ class ServerCopy:
             new_category = await self.new_guild.create_category(
                 name=category.name, position=category.position, overwrites=overwrites
             )
-            self.mappings["categories"][category] = new_category
+            self.mappings["categories"][category.id] = new_category
             self.create_object_log(
                 object_type="category",
                 object_name=new_category.name,
@@ -211,8 +231,17 @@ class ServerCopy:
             await asyncio.sleep(self.delay)
 
     async def clone_channels(self, perms: bool = True):
-        for channel in self.guild.channels:
-            category = self.mappings.get("categories", {}).get(channel.category, None)
+        for channel in self.mappings["fetched_data"]["channels"]:
+            try:
+                channel = await self.guild.fetch_channel(channel.id)
+            except discord.Forbidden:
+                logger.debug(f"Can't fetch channel {channel.name} | {channel.id}")
+                continue
+
+            category = None
+            if channel.category_id is not None:
+                category = self.mappings["categories"][channel.category_id]
+
             overwrites: dict = {}
             if perms:
                 for role, permissions in channel.overwrites.items():
@@ -284,13 +313,11 @@ class ServerCopy:
     async def add_community_channels(self, perms: bool = True):
         if self.enabled_community:
             all_channels = []
-            for channel in self.guild.channels:
+            for channel in self.mappings["fetched_data"]["channels"]:
                 if isinstance(channel, (discord.ForumChannel, discord.StageChannel)):
                     all_channels.append(channel)
             for channel in all_channels:
-                category = self.mappings.get("categories", {}).get(
-                    channel.category, None
-                )
+                category = self.mappings["categories"][channel.category_id]
                 overwrites: dict = {}
                 if perms and channel.overwrites:
                     for role, permissions in channel.overwrites.items():
@@ -345,7 +372,7 @@ class ServerCopy:
 
     async def clone_emojis(self):
         emoji_limit = min(self.new_guild.emoji_limit, self.new_guild.emoji_limit - 5)
-        for emoji in self.guild.emojis[:emoji_limit]:
+        for emoji in self.mappings["fetched_data"]["emojis"][:emoji_limit]:
             if len(self.new_guild.emojis) >= emoji_limit:
                 self.logger.warning("Emoji limit reached. Skipping...")
                 break
@@ -361,7 +388,7 @@ class ServerCopy:
     async def clone_stickers(self):
         sticker_limit = self.new_guild.sticker_limit
         created_stickers = 0
-        for sticker in self.guild.stickers:
+        for sticker in self.mappings["fetched_data"]["stickers"]:
             if created_stickers < sticker_limit:
                 try:
                     new_sticker = await self.new_guild.create_sticker(
@@ -377,18 +404,12 @@ class ServerCopy:
                         object_id=new_sticker.id,
                     )
                 except discord.NotFound:
-                    self.logger.warning(
-                        "Can't create sticker with id {}, url: {}".format(
-                            sticker.id, sticker.url
-                        )
-                    )
+                    self.logger.warning("Can't create sticker with id {}, url: {}".format(sticker.id, sticker.url))
                 await asyncio.sleep(self.delay)
             else:
                 break
 
-    async def send_webhook(
-        self, webhook: discord.Webhook, message: discord.Message, delay: float = 0.85
-    ):
+    async def send_webhook(self, webhook: discord.Webhook, message: discord.Message, delay: float = 0.85):
         author: discord.User = message.author
         files = []
         if message.attachments:
@@ -397,17 +418,21 @@ class ServerCopy:
         creation_time = message.created_at.strftime("%d/%m/%Y %H:%M")
         name: str = f"{author.name}#{author.discriminator} at {creation_time}"
         content = message.content
+
         for mapping_type, mapping_dict in self.mappings.items():
+            if mapping_type not in {"channels", "roles"}:
+                continue
+
             for old, new in mapping_dict.items():
-                if mapping_type == "channels":
-                    old_ref = f"<#{str(old.id)}>"
-                    new_ref = f"<#{str(new.id)}>"
-                elif mapping_type == "roles":
-                    old_ref = f"<@&{str(old.id)}>"
-                    new_ref = f"<@&{str(new.id)}>"
+                if mapping_type == "channels" and isinstance(old, GuildChannel) and isinstance(new, GuildChannel):
+                    old_ref = f"<#{old.id}>"
+                    new_ref = f"<#{new.id}>"
+                elif mapping_type == "roles" and isinstance(old, discord.Role) and isinstance(new, discord.Role):
+                    old_ref = f"<@&{old.id}>"
+                    new_ref = f"<@&{new.id}>"
                 else:
-                    old_ref = f"<@{str(old.id)}>"
-                    new_ref = f"<@{str(new.id)}>"
+                    continue
+
                 content = content.replace(old_ref, new_ref)
 
         try:
@@ -424,114 +449,92 @@ class ServerCopy:
                     if message.content
                     else ""
                 )
+
                 self.logger.debug(f"Cloned message from @{author.name}: {content}")
         except discord.errors.HTTPException:
             if self.debug:
-                self.logger.debug(
-                    "Can't send, skipping message in #{}".format(webhook.channel.name)
-                )
+                self.logger.debug("Can't send, skipping message in #{}".format(webhook.channel.name))
         await asyncio.sleep(delay)
 
-    async def clone_messages(self, limit: int = 512, clear: bool = True):
+    async def clone_messages(self, messages_limit: int = main.messages_limit,
+                             clear_webhooks: bool = main.messages_webhook_clear):
+        if not self.clone_messages_toggled:
+            return
+
         self.processing_messages = True
-        tasks = []
-        if self.clone_parallel and self.clone_queue:
-            await self.populate_queue(limit)
-            if self.debug:
-                self.logger.debug(f"Collected {len(self.message_queue)} messages")
-            tasks = [self.clone_message(clear) for _ in range(limit)]
-            await asyncio.gather(*tasks)
-        elif self.clone_parallel:
-            for channel in self.mappings["channels"].values():
-                tasks.append(self.clone_channel_messages(channel, limit, clear))
-            await asyncio.gather(*tasks)
-        elif self.clone_queue:
-            await self.populate_queue(limit)
-            tasks = [self.clone_message(clear) for _ in range(limit)]
-            await asyncio.gather(*tasks)
+        await self.populate_queue(messages_limit)
+
+        if self.debug:
+            self.logger.debug(f"Collected {len(self.message_queue)} messages")
+
+        await self.clone_messages_from_queue(clear_webhooks=clear_webhooks)
+
+    async def cleanup_after_cloning(self, clear=False):
         self.message_queue.clear()
+
+        if clear:
+            for webhook in self.mappings["webhooks"].values():
+                await webhook.delete()
+                await asyncio.sleep(self.webhook_delay)
+            self.mappings["webhooks"].clear()
+
+            self.logger.debug(f"Successfully cleaned up")
         self.processing_messages = False
 
-    async def clone_channel_messages(
-        self, channel, limit: int = 512, clear: bool = True
-    ):
-        async with self.channel_semaphore:
-            webhook: discord.Webhook = await channel.create_webhook(
-                name="bot by itskekoff"
-            )
-            original_channel: discord.TextChannel = self.get_key(
-                channel, self.mappings["channels"]
-            )
-            self.create_webhook_log(channel_name=channel.name)
-            self.mappings["webhooks"][webhook] = {original_channel: channel}
-            try:
-                async for message in original_channel.history(
-                    limit=limit, oldest_first=self.clone_oldest_first
-                ):
-                    await self.semaphore_task(
-                        self.send_webhook, webhook, message, self.webhook_delay
-                    )
-                self.mappings["processed_channels"][original_channel] = channel
-            except discord.errors.Forbidden:
-                if self.debug:
-                    self.logger.debug(
-                        "Missing access for channel: #{}".format(original_channel.name)
-                    )
-            if clear:
-                await webhook.delete()
-                if self.debug:
-                    self.create_webhook_log(channel_name=channel.name, deleted=True)
-                del self.mappings["webhooks"][webhook]
+    async def clone_messages_from_queue(self, clear_webhooks: bool = main.messages_webhook_clear):
+        channel_messages_map = self._split_messages_by_channel()
+        tasks = []
+        for channel, messages in channel_messages_map.items():
+            tasks.append(asyncio.create_task(self._clone_messages_for_channel(channel, messages)))
 
-    async def clone_message(self, clear: bool = True):
+        if tasks:
+            await asyncio.gather(*tasks)
+
+        await self.cleanup_after_cloning(clear=clear_webhooks)
+
+    def _split_messages_by_channel(self):
+        channel_messages_map = {}
         while self.message_queue:
             channel, message = self.message_queue.popleft()
-            webhook: discord.Webhook = await channel.create_webhook(
-                name="bot by itskekoff"
-            )
+            if channel not in channel_messages_map:
+                channel_messages_map[channel] = []
+            channel_messages_map[channel].append(message)
+        return channel_messages_map
+
+    async def _clone_messages_for_channel(self, channel: discord.abc.TextChannel, messages):
+        webhook = self.find_webhook(channel)
+        if not webhook:
+            webhook = await channel.create_webhook(name="bot by itskekoff")
+            await asyncio.sleep(self.webhook_delay)
+
             self.create_webhook_log(channel_name=channel.name)
-            self.mappings["webhooks"][webhook] = {message.channel: channel}
+            self.mappings["webhooks"][channel] = webhook
+
+        for message in messages:
+            await asyncio.sleep(self.webhook_delay)
             try:
-                await self.send_webhook(webhook, message, self.webhook_delay)
+                await self.send_webhook(webhook, message)
                 self.mappings["processed_channels"][message.channel] = channel
             except discord.errors.Forbidden:
                 if self.debug:
-                    self.logger.debug(
-                        "Missing access for channel: #{}".format(message.channel.name)
-                    )
-            if clear:
-                await webhook.delete()
-                if self.debug:
-                    self.create_webhook_log(channel_name=channel.name, deleted=True)
-                del self.mappings["webhooks"][webhook]
+                    self.logger.debug(f"Missing access for channel: #{message.channel.name}")
 
     async def on_message(self, message: discord.Message):
         if message.guild and message.guild.id == self.guild.id:
-            if (
-                self.processing_messages
-                and message.channel not in self.mappings["processed_channels"]
-            ):
+            if self.processing_messages:
                 return
             try:
                 if self.live_update:
                     new_channel = self.mappings["channels"][message.channel]
-                    webhook = None
-                    webhook_exists: bool = False
-                    if self.get_key(
-                        {message.channel: new_channel}, self.mappings["webhooks"]
-                    ):
-                        webhook_exists = True
-                        webhook = self.get_key(
-                            {message.channel: new_channel}, self.mappings["webhooks"]
-                        )
-                    if not webhook_exists:
-                        webhook = await new_channel.create_webhook(
-                            name="bot by itskekoff"
-                        )
+
+                    webhook: discord.Webhook = self.find_webhook(new_channel)
+
+                    if not webhook:
+                        webhook: discord.Webhook = await new_channel.create_webhook(name="bot by itskekoff")
+                        await asyncio.sleep(self.webhook_delay)
+
                         self.create_webhook_log(channel_name=new_channel.name)
-                        self.mappings["webhooks"][webhook] = {
-                            message.channel: new_channel
-                        }
+                        self.mappings["webhooks"][webhook] = {message.channel: new_channel}
                     await self.send_webhook(webhook, message, self.webhook_delay)
             except KeyError:
                 pass
