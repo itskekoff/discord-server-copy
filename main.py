@@ -14,7 +14,7 @@ from modules.configuration import Configuration, check_missing_keys
 from modules.updater import Updater
 from modules.utilities import get_command_info
 
-VERSION = "1.4.2"
+VERSION = "1.4.3"
 
 config_path = "config.json"
 data: Configuration = Configuration(config_path)
@@ -160,10 +160,10 @@ async def print_help(ctx: commands.Context):
 
 
 if __name__ == "__main__":
-    Updater(current_version=VERSION)
-    file_handler = logging.FileHandler(
-        f'{datetime.now().strftime("%d-%m-%Y")}-discord.log'
-    )
+    updater: Updater = Updater(current_version=VERSION, github_repo="itskekoff/discord-server-copy")
+    updater.check_for_updates()
+
+    file_handler = logging.FileHandler(f'{datetime.now().strftime("%d-%m-%Y")}-discord.log')
     file_handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
     logger.info("Logging in discord account...")

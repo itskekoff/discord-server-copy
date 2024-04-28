@@ -7,10 +7,21 @@ from loguru import logger
 
 
 class Logger:
+    """
+    A wrapper class for the loguru logger that sets up file and console logging with formatting and log rotation.
+    It allows conditional debugging output and provides a structured way to log messages from different sources.
+    """
     FILE_LOG_FORMAT = "<white>[{time:YYYY-MM-DD HH:mm:ss}</white>] | <white>[{extra[source]}</white>/<level>{level: <4}</level><white>]</white> | <white>{message}</white>"
     CONSOLE_LOG_FORMAT = "<white>{time:HH:mm:ss}</white> | <white>[{extra[source]}</white>/<level>{level: <4}</level><white>]</white> | <white>{message}</white>"
 
     def __init__(self, debug_enabled: bool = True):
+        """
+        Initializes the loguru logger for both console and file output. Configures logging format, level,
+        and file rotation based on the given parameters.
+
+        Args:
+            debug_enabled (bool): If True, set console log level to DEBUG, otherwise INFO.
+        """
         logger.remove()
         log_file_name = f'{datetime.now().strftime("%d-%m-%Y")}.log'
         log_file_path = log_file_name
