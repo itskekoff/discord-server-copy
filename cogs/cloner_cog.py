@@ -17,11 +17,25 @@ def format_guild_name(target_guild: discord.Guild) -> str:
 class ClonerCog(commands.Cog):
     def __init__(self, bot):
         self.bot: commands.Bot = bot
+        self.cloners: list[ServerCopy] = []
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if self.cloners:
+            for cloner in self.cloners:
+                await cloner.on_message(message=message)
 
     @commands.command(name="copy", aliases=["clone", "paste", "parse", "start"])
     async def copy(self, ctx: commands.Context, *, args_str: str = ""):
         """
-        Fully copies discord server including messages
+        Clones an entire Discord server, including all messages. Specifies behavior for the optional 'from' and 'new' arguments.
+
+        Main arguments:
+        - from (default: None): Specifies the source server ID for cloning. If omitted or set to None,
+            the server where the command is executed will be used as the source.
+        - new (default: None): Determines the name of the new cloned server. If omitted or set to None,
+            a new server with a default name will be created.
+
         """
 
         await ctx.message.delete()
@@ -37,7 +51,7 @@ class ClonerCog(commands.Cog):
             "clone_emojis": main.clone_emojis,
             "clone_stickers": main.clone_stickers,
             "clone_messages": main.clone_messages_enabled,
-            "live_update": main.live_update_enabled
+            "real_time_messages": main.live_update_enabled
         }
 
         args = parse_args(args_str, defaults)
@@ -54,11 +68,12 @@ class ClonerCog(commands.Cog):
             to_guild=None,
             delay=main.clone_delay,
             webhook_delay=main.messages_delay,
-            live_update_toggled=args["live_update"],
+            live_update_toggled=args["real_time_messages"],
             clone_messages_toggled=args["clone_messages"],
             oldest_first=main.clone_oldest_first,
         )
         logger = cloner.logger
+        self.cloners.append(cloner)
 
         if args["new"] is None or await self.bot.fetch_guild(args["new"]) is None:
             logger.info("Creating server...")
@@ -80,7 +95,6 @@ class ClonerCog(commands.Cog):
             await new_guild.edit(name=target_name)
 
         cloner.new_guild = new_guild
-        main.cloner_instances.append(cloner)
 
         logger.info("Processing modules")
 
@@ -110,6 +124,9 @@ class ClonerCog(commands.Cog):
         for message, function in true_conditions:
             logger.info(message)
             await function()
+
+        if not args["real_time_messages"]:
+            self.cloners.remove(cloner)
 
         logger.success(f"Done in {round((time.time() - start_time), 2)} seconds.")
 

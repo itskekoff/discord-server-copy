@@ -9,7 +9,7 @@ from modules.logger import Logger
 class Updater:
     def __init__(self, current_version: str):
         logger = Logger()
-        logger.bind(server="UPDATER")
+        logger.bind(source="Updater")
         resp = urllib.request.urlopen(
             url="https://raw.githubusercontent.com/itskekoff/discord-server-copy/main/main.py"
         ).read()

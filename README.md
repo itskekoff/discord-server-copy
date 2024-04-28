@@ -22,26 +22,41 @@ Obtaining your Discord token is the first step:
 (webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken()
 ```
 
-Executing start.bat sets up the required configuration. Adjust as needed and rerun start.bat.
+### Creating Virtual Environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### Getting started
+
+Navigate to project directory and execute this commands:
+```bash
+pip install -r requirements.txt
+python main.py
+```
 
 Within any guild, execute your clone command (default prefix is cp! as set in config.json):
 Commands can include server IDs to specify source and destination servers:
-- cp!clone duplicates the current server.
-- cp!clone from=0 clones from the specified server.
-- cp!clone new=0 directs cloning to the specified server.
-- cp!clone from=0 new=0 dictates both source and destination servers.
+- `cp!clone` duplicates the current server.
+- `cp!clone from=0` clones from the specified server.
+- `cp!clone new=0` directs cloning to the specified server.
+- `cp!clone from=0 new=0` dictates both source and destination servers.
 
 Config settings can be adjusted on-the-fly via clone commands, e.g., 
-cp!clone from=1337 live_update=true clone_message=false
+`cp!clone from=1337 live_update=true clone_message=false`
+
+More detailed command help in "help" command, e.g. `cp!help`
 
 ### Arguments List
 
 Use with default values from config.json or specify as needed:
-1. from=0 – Source server ID
-2. new=0 – Destination server ID
-3. clear_guild=true/false – Whether to clear the new or specified guild
-4. clone_icon=true/false – Clone server icon
-5. ... and so on for other cloning aspects like roles, channels, banners, emojis, stickers, and messages with live updates.
+1. `from=0` – Source server ID
+2. `new=0` – Destination server ID
+3. `clear_guild=true/false` – Whether to clear the new or specified guild
+4. `clone_icon=true/false` – Clone server icon
+5. ... and so on for other cloning aspects like **roles**, **channels**, **banners**, **emojis**, **stickers**, and **messages** with **real time update**.
 
 ## 📋 Requirements
 - Python 3.10 (default) - also compatible with versions 3.9 (updated testing range).

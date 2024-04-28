@@ -12,8 +12,9 @@ from discord.ext import commands
 from modules.logger import Logger
 from modules.configuration import Configuration, check_missing_keys
 from modules.updater import Updater
+from modules.utilities import get_command_info
 
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 
 config_path = "config.json"
 data: Configuration = Configuration(config_path)
@@ -53,7 +54,7 @@ default_config: dict = {
 data.set_default(default=default_config)
 
 logger = Logger()
-logger.bind(server="CONFIGURATION")
+logger.bind(source="Configuration")
 
 if not data.file_exists(config_path):
     data.write_defaults().flush()
@@ -114,8 +115,6 @@ live_update_enabled, live_delay = (
 
 logger = Logger(debug_enabled=debug)
 
-cloner_instances = []
-
 if clone_channels and (not clone_roles and clone_overwrites):
     clone_roles = True
     logger.warning(
@@ -131,6 +130,7 @@ if clone_messages_enabled and (messages_limit <= 0):
     logger.warning("Messages disabled because its limit is zero.")
 
 bot = commands.Bot(command_prefix=prefix, case_insensitive=True, self_bot=True)
+bot.remove_command('help')
 
 logger.reset()
 
@@ -148,10 +148,15 @@ async def on_connect():
 
 @bot.event
 async def on_message(message: discord.Message):
-    if cloner_instances:
-        for instance in cloner_instances:
-            await instance.on_message(message=message)
     await bot.process_commands(message)
+
+
+@bot.command(name="help")
+async def print_help(ctx: commands.Context):
+    """
+    Displays help message
+    """
+    await ctx.message.edit(content=f"```\n{get_command_info(bot)}```")
 
 
 if __name__ == "__main__":

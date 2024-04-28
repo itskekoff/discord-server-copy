@@ -7,14 +7,14 @@ from loguru import logger
 
 
 class Logger:
-    FILE_LOG_FORMAT = "<white>[{time:YYYY-MM-DD HH:mm:ss}</white>] | <white>[{extra[server]}</white>/<level>{level: <4}</level><white>]</white> | <white>{message}</white>"
-    CONSOLE_LOG_FORMAT = "<white>{time:HH:mm:ss}</white> | <white>[{extra[server]}</white>/<level>{level: <4}</level><white>]</white> | <white>{message}</white>"
+    FILE_LOG_FORMAT = "<white>[{time:YYYY-MM-DD HH:mm:ss}</white>] | <white>[{extra[source]}</white>/<level>{level: <4}</level><white>]</white> | <white>{message}</white>"
+    CONSOLE_LOG_FORMAT = "<white>{time:HH:mm:ss}</white> | <white>[{extra[source]}</white>/<level>{level: <4}</level><white>]</white> | <white>{message}</white>"
 
     def __init__(self, debug_enabled: bool = True):
         logger.remove()
         log_file_name = f'{datetime.now().strftime("%d-%m-%Y")}.log'
         log_file_path = log_file_name
-        self.main_logger = logger.bind(server="MAIN")
+        self.main_logger = logger.bind(source="Main")
         self.main_logger.add(
             log_file_path,
             format=self.FILE_LOG_FORMAT,
@@ -59,4 +59,4 @@ class Logger:
         return self.main_logger
 
     def reset(self) -> logger:
-        self.main_logger = self.main_logger.bind(server="MAIN")
+        self.main_logger = self.main_logger.bind(source="Main")

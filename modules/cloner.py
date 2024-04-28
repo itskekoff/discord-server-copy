@@ -43,17 +43,16 @@ class ServerCopy:
         self.processing_messages = False
 
         self.logger = Logger(debug_enabled=self.debug)
-        self.logger.bind(server=self.guild.name, length=8)
+        self.logger.bind(source=self.guild.name)
 
         self.message_queue = deque()
 
         self.mappings = {
-            "roles": {},
-            "categories": {},
-            "webhooks": {},
-            "channels": {},
-            "emojis": {},
-            "processed_channels": {},
+            "roles": {},  # old_role_id: new_role
+            "categories": {},  # old_category_id: new_category
+            "webhooks": {},  # new_channel_id: created_webhook
+            "channels": {},  # old_channel_id: created_channel
+            "emojis": {},  # old_emoji_id: new_emoji
             "fetched_data": {"roles": [], "channels": Sequence[GuildChannel], "emojis": [], "stickers": []},
         }
 
@@ -89,10 +88,10 @@ class ServerCopy:
         else:
             return image_bytes
 
-    def find_webhook(self, channel_obj: GuildChannel) -> discord.Webhook | None:
-        for webhook, channel_to_webhook_mapping in self.mappings["webhooks"].items():
-            for channel_obj, matched_channel in channel_to_webhook_mapping.items():
-                if channel_obj == channel_obj:
+    def find_webhook(self, channel_id: int) -> discord.Webhook | None:
+        if self.mappings["webhooks"]:
+            for mapped_channel_id, webhook in self.mappings["webhooks"].items():
+                if mapped_channel_id == channel_id:
                     return webhook
         return None
 
@@ -116,10 +115,10 @@ class ServerCopy:
             self.logger.debug(f"Created webhook in #{channel_name}")
 
     async def populate_queue(self, limit: int = 512):
-        for channel in self.mappings["channels"].values():
-            original_channel: discord.TextChannel = self.get_key(channel, self.mappings["channels"])
+        for channel_id, new_channel in self.mappings["channels"].items():
+            original_channel: discord.TextChannel = await self.guild.fetch_channel(channel_id)
             async for message in original_channel.history(limit=limit, oldest_first=self.clone_oldest_first):
-                self.message_queue.append((channel, message))
+                self.message_queue.append((new_channel, message))
 
     async def prepare_server(self) -> None:
         methods = [
@@ -189,9 +188,10 @@ class ServerCopy:
             if role.name != "@everyone":
                 roles_create.append(role)
             else:
-                self.mappings["roles"][role] = discord.utils.get(
+                self.mappings["roles"][role.id] = discord.utils.get(
                     self.new_guild.roles, name="@everyone"
                 )
+
         for role in reversed(roles_create):
             new_role = await self.new_guild.create_role(
                 name=role.name,
@@ -200,7 +200,7 @@ class ServerCopy:
                 mentionable=role.mentionable,
                 permissions=role.permissions,
             )
-            self.mappings["roles"][role] = new_role
+            self.mappings["roles"][role.id] = new_role
             self.create_object_log(
                 object_type="role", object_name=new_role.name, object_id=new_role.id
             )
@@ -260,7 +260,7 @@ class ServerCopy:
                     default_auto_archive_duration=channel.default_auto_archive_duration,
                     default_thread_slowmode_delay=channel.default_thread_slowmode_delay,
                 )
-                self.mappings["channels"][channel] = new_channel
+                self.mappings["channels"][channel.id] = new_channel
                 self.create_channel_log(
                     channel_type="text",
                     channel_name=new_channel.name,
@@ -276,7 +276,7 @@ class ServerCopy:
                     category=category,
                     overwrites=overwrites,
                 )
-                self.mappings["channels"][channel] = new_channel
+                self.mappings["channels"][channel.id] = new_channel
                 self.create_channel_log(
                     channel_type="voice",
                     channel_name=new_channel.name,
@@ -288,7 +288,7 @@ class ServerCopy:
         if self.enabled_community:
             afk_channel = None
             try:
-                afk_channel = self.mappings["channels"][self.guild.afk_channel]
+                afk_channel = self.mappings["channels"][self.guild.afk_channel.id]
             except KeyError:
                 pass
             await self.new_guild.edit(
@@ -297,12 +297,10 @@ class ServerCopy:
                 default_notifications=self.guild.default_notifications,
                 afk_channel=afk_channel,
                 afk_timeout=self.guild.afk_timeout,
-                system_channel=self.mappings["channels"][self.guild.system_channel],
+                system_channel=self.mappings["channels"][self.guild.system_channel.id],
                 system_channel_flags=self.guild.system_channel_flags,
-                rules_channel=self.mappings["channels"][self.guild.rules_channel],
-                public_updates_channel=self.mappings["channels"][
-                    self.guild.public_updates_channel
-                ],
+                rules_channel=self.mappings["channels"][self.guild.rules_channel.id],
+                public_updates_channel=self.mappings["channels"][self.guild.public_updates_channel.id],
                 explicit_content_filter=self.guild.explicit_content_filter,
                 preferred_locale=self.guild.preferred_locale,
             )
@@ -328,7 +326,7 @@ class ServerCopy:
                     )
                     for tag in tags:
                         if tag.emoji.id:
-                            tag.emoji = self.mappings["emojis"].get(tag.emoji, None)
+                            tag.emoji = self.mappings["emojis"].get(tag.emoji.id, None)
 
                     new_channel = await self.new_guild.create_forum_channel(
                         name=channel.name,
@@ -343,7 +341,7 @@ class ServerCopy:
                         default_thread_slowmode_delay=channel.default_thread_slowmode_delay,
                         available_tags=tags,
                     )
-                    self.mappings["channels"][channel] = new_channel
+                    self.mappings["channels"][channel.id] = new_channel
                     self.create_channel_log(
                         channel_type="forum",
                         channel_name=new_channel.name,
@@ -361,7 +359,7 @@ class ServerCopy:
                         video_quality_mode=channel.video_quality_mode,
                         overwrites=overwrites,
                     )
-                    self.mappings["channels"][channel] = new_channel
+                    self.mappings["channels"][channel.id] = new_channel
                     self.create_channel_log(
                         channel_type="stage",
                         channel_name=new_channel.name,
@@ -378,7 +376,7 @@ class ServerCopy:
             new_emoji = await self.new_guild.create_custom_emoji(
                 name=emoji.name, image=await emoji.read()
             )
-            self.mappings["emojis"][emoji] = new_emoji
+            self.mappings["emojis"][emoji.id] = new_emoji
             self.create_object_log(
                 object_type="emoji", object_name=new_emoji.name, object_id=new_emoji.id
             )
@@ -416,7 +414,10 @@ class ServerCopy:
         files = []
         if message.attachments:
             for attachment in message.attachments:
-                files.append(await attachment.to_file())
+                try:
+                    files.append(await attachment.to_file())
+                except discord.NotFound:
+                    pass
         creation_time = message.created_at.strftime("%d/%m/%Y %H:%M")
         name: str = f"{author.name}#{author.discriminator} at {creation_time}"
         content = message.content
@@ -425,12 +426,12 @@ class ServerCopy:
             if mapping_type not in {"channels", "roles"}:
                 continue
 
-            for old, new in mapping_dict.items():
-                if mapping_type == "channels" and isinstance(old, GuildChannel) and isinstance(new, GuildChannel):
-                    old_ref = f"<#{old.id}>"
+            for old_id, new in mapping_dict.items():
+                if mapping_type == "channels":
+                    old_ref = f"<#{old_id}>"
                     new_ref = f"<#{new.id}>"
-                elif mapping_type == "roles" and isinstance(old, discord.Role) and isinstance(new, discord.Role):
-                    old_ref = f"<@&{old.id}>"
+                elif mapping_type == "roles":
+                    old_ref = f"<@&{old_id}>"
                     new_ref = f"<@&{new.id}>"
                 else:
                     continue
@@ -452,10 +453,11 @@ class ServerCopy:
                     else ""
                 )
 
-                self.logger.debug(f"Cloned message from @{author.name}: {content}")
+                self.logger.debug(f"Cloned message from {author.name}" + f": {content}" if content else "")
         except discord.errors.HTTPException:
             if self.debug:
-                self.logger.debug("Can't send, skipping message in #{}".format(webhook.channel.name))
+                self.logger.debug(
+                    "Can't send, skipping message in #{}".format(webhook.channel.name if webhook.channel else ""))
         await asyncio.sleep(delay)
 
     async def clone_messages(self, messages_limit: int = main.messages_limit,
@@ -480,7 +482,7 @@ class ServerCopy:
                 await asyncio.sleep(self.webhook_delay)
             self.mappings["webhooks"].clear()
 
-            self.logger.debug(f"Successfully cleaned up")
+            self.logger.success(f"Successfully cleaned up after cloning messages")
         self.processing_messages = False
 
     async def clone_messages_from_queue(self, clear_webhooks: bool = main.messages_webhook_clear) -> None:
@@ -506,22 +508,29 @@ class ServerCopy:
     async def _clone_messages_for_channel(self,
                                           channel: discord.channel.TextChannel,
                                           messages: typing.List[discord.Message]) -> None:
-        webhook = self.find_webhook(channel)
+        webhook = self.find_webhook(channel.id)
         if not webhook:
-            webhook = await channel.create_webhook(name="bot by itskekoff")
+            try:
+                webhook = await channel.create_webhook(name="bot by itskekoff")
+            except (discord.NotFound or discord.Forbidden) as e:
+                if self.debug:
+                    self.logger.debug(f"Can't create webhook: " +
+                                      'unknown channel' if isinstance(e, discord.NotFound) else 'missing permissions')
+                return
+
             await asyncio.sleep(self.webhook_delay)
 
             self.create_webhook_log(channel_name=channel.name)
-            self.mappings["webhooks"][channel] = webhook
+            self.mappings["webhooks"][channel.id] = webhook
 
         for message in messages:
             await asyncio.sleep(self.webhook_delay)
             try:
                 await self.send_webhook(webhook, message)
-                self.mappings["processed_channels"][message.channel] = channel
             except discord.errors.Forbidden:
                 if self.debug:
-                    self.logger.debug(f"Missing access for channel: #{message.channel.name}")
+                    channel_name_str: str = message.channel.name if message.channel else "unknown"
+                    self.logger.debug(f"Missing access for channel: #{channel_name_str}")
 
     async def on_message(self, message: discord.Message):
         if message.guild and message.guild.id == self.guild.id:
@@ -529,16 +538,20 @@ class ServerCopy:
                 return
             try:
                 if self.live_update:
-                    new_channel = self.mappings["channels"][message.channel]
+                    new_channel = self.mappings["channels"][message.channel.id]
 
-                    webhook: discord.Webhook = self.find_webhook(new_channel)
+                    if not new_channel:
+                        logger.warning("Can't clone message from channel that doesn't exists in new guild")
+                        return
+
+                    webhook: discord.Webhook = self.find_webhook(new_channel.id)
 
                     if not webhook:
                         webhook: discord.Webhook = await new_channel.create_webhook(name="bot by itskekoff")
                         await asyncio.sleep(self.webhook_delay)
 
                         self.create_webhook_log(channel_name=new_channel.name)
-                        self.mappings["webhooks"][webhook] = {message.channel: new_channel}
+                        self.mappings["webhooks"][message.channel.id] = webhook
                     await self.send_webhook(webhook, message, self.webhook_delay)
             except KeyError:
                 pass
