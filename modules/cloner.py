@@ -217,7 +217,7 @@ class ServerCopy:
             if perms:
                 for role, permissions in category.overwrites.items():
                     if isinstance(role, discord.Role):
-                        overwrites[self.mappings["roles"][role]] = permissions
+                        overwrites[self.mappings["roles"][role.id]] = permissions
             new_category = await self.new_guild.create_category(
                 name=category.name, position=category.position, overwrites=overwrites
             )
@@ -245,7 +245,7 @@ class ServerCopy:
             if perms:
                 for role, permissions in channel.overwrites.items():
                     if isinstance(role, discord.Role):
-                        overwrites[self.mappings["roles"][role]] = permissions
+                        overwrites[self.mappings["roles"][role.id]] = permissions
             if self.debug and overwrites:
                 self.logger.debug(f"Got overwrites mapping for channel #{channel.name}")
             if isinstance(channel, discord.TextChannel):
@@ -319,7 +319,7 @@ class ServerCopy:
                 if perms and channel.overwrites:
                     for role, permissions in channel.overwrites.items():
                         if isinstance(role, discord.Role):
-                            overwrites[self.mappings["roles"][role]] = permissions
+                            overwrites[self.mappings["roles"][role.id]] = permissions
                 if isinstance(channel, discord.ForumChannel):
                     tags: discord.abc.Sequence[discord.ForumTag] = (
                         channel.available_tags
@@ -452,6 +452,8 @@ class ServerCopy:
                     if message.content
                     else ""
                 )
+
+                content = content.replace("\n", "")
 
                 self.logger.debug(f"Cloned message from {author.name}" + f": {content}" if content else "")
         except discord.errors.HTTPException:
