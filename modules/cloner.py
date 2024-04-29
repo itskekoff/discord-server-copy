@@ -1,5 +1,4 @@
 import asyncio
-import typing
 
 from collections import deque
 from collections.abc import Sequence
@@ -10,7 +9,7 @@ from discord.abc import GuildChannel
 
 import main
 from modules.logger import Logger
-from modules.utilities import get_first_frame, get_bitrate, truncate_string
+from modules.utilities import get_first_frame, get_bitrate, truncate_string, split_messages_by_channel
 
 logger = Logger()
 
@@ -18,7 +17,8 @@ logger = Logger()
 class ServerCopy:
     def __init__(self, from_guild: discord.Guild, to_guild: discord.Guild | None,
                  delay: float = 1, webhook_delay: float = 0.65, debug_enabled: bool = True,
-                 live_update_toggled: bool = False, clone_messages_toggled: bool = False, oldest_first: bool = True):
+                 live_update_toggled: bool = False, process_new_messages: bool = True,
+                 clone_messages_toggled: bool = False, oldest_first: bool = True):
         """
         ServerCopy facilitates cloning of server components from a source guild to a target guild.
 
@@ -41,6 +41,7 @@ class ServerCopy:
         self.clone_oldest_first = oldest_first
         self.clone_messages_toggled = clone_messages_toggled
         self.live_update = live_update_toggled
+        self.new_messages_enabled = process_new_messages
 
         self.enabled_community = False
         self.processing_messages = False
@@ -49,6 +50,7 @@ class ServerCopy:
         self.logger.bind(source=self.guild.name)
 
         self.message_queue = deque()
+        self.new_messages_queue = deque()
 
         self.mappings = {
             "roles": {},  # old_role_id: new_role
@@ -425,10 +427,10 @@ class ServerCopy:
                                            replace_newline_with="") if message.content else "")
 
                 self.logger.debug(f"Cloned message from {author.name}" + f": {content}" if content else "")
-        except discord.errors.HTTPException:
+        except discord.HTTPException and discord.Forbidden:
             if self.debug:
                 self.logger.debug(
-                    "Can't send, skipping message in #{}".format(webhook.channel.name if webhook.channel else ""))
+                    "Can't send, skipping message in #{}".format(message.channel.name if message.channel else ""))
         await asyncio.sleep(delay)
 
     async def clone_messages(self, messages_limit: int = main.messages_limit,
@@ -477,48 +479,51 @@ class ServerCopy:
         Args:
             clear_webhooks (bool): A boolean indicating whether to clear webhooks after cloning. Defaults to the configured setting in main.
         """
-        channel_messages_map = self._split_messages_by_channel()
-        tasks = []
-        for channel, messages in channel_messages_map.items():
-            tasks.append(asyncio.create_task(self._clone_messages_for_channel(channel, messages)))
+        channel_messages_map = split_messages_by_channel(self.message_queue)
+        if channel_messages_map:
+            await self._process_messages_channel_map(channel_messages_map)
 
-        if tasks:
-            await asyncio.gather(*tasks)
+        if self.new_messages_queue:
+            await asyncio.sleep(self.webhook_delay)
+            new_messages_map = split_messages_by_channel(self.new_messages_queue)
+            if new_messages_map:
+                await self._process_messages_channel_map(new_messages_map)
 
         await self.cleanup_after_cloning(clear=clear_webhooks)
 
-    def _split_messages_by_channel(self) -> typing.Dict[discord.channel.TextChannel, typing.List[typing.Any]]:
+    async def _process_messages_channel_map(self, channel_messages_map):
         """
-        Splits the queued messages by their destination channels into a dictionary mapping channels to message lists.
-
-        Returns:
-            typing.Dict[discord.channel.TextChannel, typing.List[typing.Any]]: A dictionary mapping text channels to corresponding lists of messages to be cloned.
-        """
-        channel_messages_map = {}
-        while self.message_queue:
-            channel, message = self.message_queue.popleft()
-            if channel not in channel_messages_map:
-                channel_messages_map[channel] = []
-            channel_messages_map[channel].append(message)
-        return channel_messages_map
-
-    async def _clone_messages_for_channel(self, channel: discord.channel.TextChannel,
-                                          messages: typing.List[discord.Message]) -> None:
-        """
-        Asynchronously clones a list of messages to a specific channel using a webhook.
+        Processes messages for each channel in the given map.
 
         Args:
-            channel (discord.channel.TextChannel): The destination text channel to clone the messages to.
-            messages (typing.List[discord.Message]): The list of messages to be cloned to the channel.
+            channel_messages_map (dict): A dictionary mapping channels to their corresponding message lists.
+        """
+        while channel_messages_map:
+            for channel, messages in list(channel_messages_map.items()):
+                if messages:
+                    await self._clone_message_with_delay(channel, messages.pop(0))
+                    await asyncio.sleep(self.webhook_delay)
+                else:
+                    self.processed_channels.append(channel.id)
+                    del channel_messages_map[channel]
+
+
+    async def _clone_message_with_delay(self, channel: discord.channel.TextChannel, message: discord.Message) -> None:
+        """
+        Asynchronously clones a single message to a specific channel using a webhook with delay.
+
+        Args:
+            channel (discord.channel.TextChannel): The destination text channel to clone the message to.
+            message (discord.Message): The message to be cloned to the channel.
         """
         webhook = self.find_webhook(channel.id)
         if not webhook:
             try:
                 webhook = await channel.create_webhook(name="bot by itskekoff")
-            except (discord.NotFound or discord.Forbidden) as e:
+            except (discord.NotFound, discord.Forbidden) as e:
                 if self.debug:
                     self.logger.debug(f"Can't create webhook: " +
-                                      'unknown channel' if isinstance(e, discord.NotFound) else 'missing permissions')
+                                      ('unknown channel' if isinstance(e, discord.NotFound) else 'missing permissions'))
                 return
 
             await asyncio.sleep(self.webhook_delay)
@@ -526,15 +531,12 @@ class ServerCopy:
             self.create_webhook_log(channel_name=channel.name)
             self.mappings["webhooks"][channel.id] = webhook
 
-        for message in messages:
-            await asyncio.sleep(self.webhook_delay)
-            try:
-                await self.send_webhook(webhook, message)
-            except discord.errors.Forbidden:
-                if self.debug:
-                    channel_name_str: str = message.channel.name if message.channel else "unknown"
-                    self.logger.debug(f"Missing access for channel: #{channel_name_str}")
-        self.processed_channels.append(channel.id)
+        try:
+            await self.send_webhook(webhook, message)
+        except discord.errors.Forbidden:
+            if self.debug:
+                channel_name_str: str = message.channel.name if message.channel else "unknown"
+                self.logger.debug(f"Missing access for channel: #{channel_name_str}")
 
     async def on_message(self, message: discord.Message):
         """
@@ -553,6 +555,8 @@ class ServerCopy:
                         return
 
                     if self.processing_messages and new_channel.id not in self.processed_channels:
+                        if self.new_messages_enabled:
+                            self.new_messages_queue.append((new_channel, message))
                         return
 
                     webhook: discord.Webhook = self.find_webhook(new_channel.id)

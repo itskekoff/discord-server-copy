@@ -3,6 +3,7 @@ import inspect
 import io
 import re
 import typing
+from collections import deque
 
 import discord
 from PIL import Image, ImageSequence
@@ -48,6 +49,25 @@ def truncate_string(string: str, length: int, replace_newline_with: str = ' ') -
     return (string if len(string) <= length else string[:length - 3] + '...').strip()
 
 
+def split_messages_by_channel(messages_queue: deque) -> typing.Dict[discord.TextChannel, typing.List[typing.Any]]:
+    """
+    Splits the queued messages by their destination channels into a dictionary mapping channels to message lists.
+
+    Args:
+        messages_queue (deque): A deque containing queued messages.
+
+    Returns:
+        dict: A dictionary mapping text channels to corresponding lists of messages to be cloned.
+    """
+    channel_messages_map = {}
+    while messages_queue:
+        channel, message = messages_queue.popleft()
+        if channel not in channel_messages_map:
+            channel_messages_map[channel] = []
+        channel_messages_map[channel].append(message)
+    return channel_messages_map
+
+
 def get_bitrate(channel: discord.channel.VocalGuildChannel) -> int | None:
     """
     Returns the bitrate of a Discord vocal guild channel if it's less than or equal to 96000; otherwise, None.
@@ -82,6 +102,7 @@ async def get_first_frame(image: discord.Asset) -> bytes:
         return byte_arr.getvalue()
     else:
         return image_bytes
+
 
 def format_description(description: str) -> str:
     """

@@ -51,7 +51,8 @@ class ClonerCog(commands.Cog):
             "clone_emojis": main.clone_emojis,
             "clone_stickers": main.clone_stickers,
             "clone_messages": main.clone_messages_enabled,
-            "real_time_messages": main.live_update_enabled
+            "real_time_messages": main.live_update_enabled,
+            "process_new_messages": main.process_new_messages_enabled
         }
 
         args = parse_args(args_str, defaults)
@@ -69,6 +70,7 @@ class ClonerCog(commands.Cog):
             delay=main.clone_delay,
             webhook_delay=main.messages_delay,
             live_update_toggled=args["real_time_messages"],
+            process_new_messages=args["process_new_messages"],
             clone_messages_toggled=args["clone_messages"],
             oldest_first=main.clone_oldest_first,
         )

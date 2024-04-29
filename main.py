@@ -14,7 +14,7 @@ from modules.configuration import Configuration, check_missing_keys
 from modules.updater import Updater
 from modules.utilities import get_command_info
 
-VERSION = "1.4.3"
+VERSION = "1.4.4"
 
 config_path = "config.json"
 data: Configuration = Configuration(config_path)
@@ -47,6 +47,7 @@ default_config: dict = {
         "__comment__": "Automatically detect new messages and send it via webhook",
         "__comment2__": "Also works with clone_messages (starts sending when channel is fully processed)",
         "enabled": False,
+        "process_new_messages": True,
         "message_delay": 0.75,
     },
 }
@@ -108,8 +109,9 @@ messages_webhook_clear, messages_limit, messages_delay = (
     clone_messages_values["delay"],
 )
 
-live_update_enabled, live_delay = (
+live_update_enabled, process_new_messages_enabled, live_delay = (
     live_update_values["enabled"],
+    live_update_values["process_new_messages"],
     live_update_values["message_delay"]
 )
 
