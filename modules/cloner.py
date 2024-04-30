@@ -58,6 +58,9 @@ class ServerCopy:
 
         self.logger = Logger(debug_enabled=self.debug)
         self.logger.bind(source=self.guild.name)
+        
+        self.message_count = 0
+        self.message_queue_con = 0
 
         self.message_queue = deque()
         self.new_messages_queue = deque()
@@ -438,11 +441,13 @@ class ServerCopy:
         try:
             await webhook.send(content=content, avatar_url=author.display_avatar.url,
                                username=name, embeds=message.embeds, files=files)
+                               
             if self.debug:
                 content = (truncate_string(string=message.content, length=32,
                                            replace_newline_with="") if message.content else "")
                 content = content.rstrip()
-                self.logger.debug(f"Cloned message from {author.name}" + f": {content}" if content else "")
+                self.message_count += 1
+                self.logger.debug(f"{self.message_count} / {self.message_queue_con} | Cloned message from {author.name}" + f": {content}" if content else "")
         except discord.HTTPException or discord.Forbidden:
             if self.debug:
                 self.logger.debug(
@@ -464,7 +469,7 @@ class ServerCopy:
 
         self.processing_messages = True
         await self.populate_queue(messages_limit)
-
+        self.message_queue_con = len(self.message_queue)
         if self.debug:
             self.logger.debug(f"Collected {len(self.message_queue)} messages")
 
