@@ -4,6 +4,7 @@ import io
 import re
 import typing
 from collections import deque
+from datetime import timedelta
 
 import discord
 from PIL import Image, ImageSequence
@@ -102,6 +103,32 @@ async def get_first_frame(image: discord.Asset) -> bytes:
         return byte_arr.getvalue()
     else:
         return image_bytes
+
+
+def format_time(delta: timedelta) -> str:
+    """
+    Formats a timedelta object into a readable English string.
+
+    Args:
+        delta (timedelta): A timedelta object representing a duration.
+
+    Returns:
+        str: A formatted time string in the format "X days Y hours Z minutes W seconds".
+             The singular or plural form of words (day/hour/minute/second) is used
+             based on their quantity. Only non-zero time units are included.
+    """
+    days, seconds = delta.days, delta.seconds
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+    time_parts = [
+        ("day", days),
+        ("hour", hours),
+        ("minute", minutes),
+        ("second", seconds)
+    ]
+    return " ".join(f"{value} {name}{('s' if value != 1 else '')}"
+                    for name, value in time_parts if value)
 
 
 def format_description(description: str) -> str:

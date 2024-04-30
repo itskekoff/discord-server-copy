@@ -12,9 +12,9 @@ from discord.ext import commands
 from modules.logger import Logger
 from modules.configuration import Configuration, check_missing_keys
 from modules.updater import Updater
-from modules.utilities import get_command_info
+from modules.utilities import get_command_info, format_time
 
-VERSION = "1.4.4"
+VERSION = "1.4.5"
 
 config_path = "config.json"
 data: Configuration = Configuration(config_path)
@@ -140,6 +140,9 @@ logger.reset()
 @bot.event
 async def on_connect():
     logger.success("Logged on as {0.user}".format(bot))
+
+    if len(bot.extensions) > 0:
+        return
 
     for filename in os.listdir('./cogs'):
         if filename.endswith('.py') and not filename.startswith('_'):

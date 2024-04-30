@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 
 from collections import deque
 from collections.abc import Sequence
@@ -9,39 +10,48 @@ from discord.abc import GuildChannel
 
 import main
 from modules.logger import Logger
-from modules.utilities import get_first_frame, get_bitrate, truncate_string, split_messages_by_channel
+from modules.utilities import get_first_frame, get_bitrate, truncate_string, split_messages_by_channel, format_time
 
 logger = Logger()
 
 
 class ServerCopy:
-    def __init__(self, from_guild: discord.Guild, to_guild: discord.Guild | None,
+    def __init__(self, bot: discord.Client, from_guild: discord.Guild, to_guild: discord.Guild | None,
                  delay: float = 1, webhook_delay: float = 0.65, debug_enabled: bool = True,
                  live_update_toggled: bool = False, process_new_messages: bool = True,
-                 clone_messages_toggled: bool = False, oldest_first: bool = True):
+                 clone_messages_toggled: bool = False, oldest_first: bool = True,
+                 disable_fetch_channels: bool = False):
         """
         ServerCopy facilitates cloning of server components from a source guild to a target guild.
 
         Args:
+            bot (discord.Client): Discord bot instance
             from_guild (discord.Guild): The source guild to clone from.
             to_guild (discord.Guild | None): The target guild to clone to.
             delay (float): A delay between operations to prevent rate-limiting.
             webhook_delay (float): A specific delay for operations involving webhooks.
             debug_enabled (bool): Whether to enable debug logging.
             live_update_toggled (bool): If true, enables live update functionality.
+            process_new_messages (bool): If true, enables processing new messages when cloning other messages
             clone_messages_toggled (bool): If true, enables cloning of messages from the source guild.
             oldest_first (bool): Determines the order in which messages are cloned.
+            disable_fetch_channels (bool): If true, disables guild.fetch_channel() and uses cached one
         """
+        self.bot = bot
+
         self.guild = from_guild
         self.new_guild = to_guild
+
         self.delay = delay
         self.webhook_delay = webhook_delay
+
         self.debug = debug_enabled
 
         self.clone_oldest_first = oldest_first
         self.clone_messages_toggled = clone_messages_toggled
         self.live_update = live_update_toggled
         self.new_messages_enabled = process_new_messages
+        self.disable_fetch_channels = disable_fetch_channels
 
         self.enabled_community = False
         self.processing_messages = False
@@ -86,9 +96,13 @@ class ServerCopy:
     async def populate_queue(self, limit: int = 512):
         """Populate the message queue with messages from the source guild's channels."""
         for channel_id, new_channel in self.mappings["channels"].items():
-            original_channel: discord.TextChannel = await self.guild.fetch_channel(channel_id)
-            async for message in original_channel.history(limit=limit, oldest_first=self.clone_oldest_first):
-                self.message_queue.append((new_channel, message))
+            try:
+                original_channel: discord.TextChannel = await self.guild.fetch_channel(channel_id)
+                async for message in original_channel.history(limit=limit, oldest_first=self.clone_oldest_first):
+                    self.message_queue.append((new_channel, message))
+            except discord.Forbidden:
+                logger.debug(f"Can't fetch channel message history (no permissions): {channel_id}")
+                continue
 
     async def prepare_server(self) -> None:
         """Prepares the target server by cleaning up existing roles, channels, emojis, and stickers."""
@@ -223,11 +237,12 @@ class ServerCopy:
             perms (bool): If set to True, will clone channel-specific role permissions. Defaults to True.
         """
         for channel in self.mappings["fetched_data"]["channels"]:
-            try:
-                channel = await self.guild.fetch_channel(channel.id)
-            except discord.Forbidden:
-                logger.debug(f"Can't fetch channel {channel.name} | {channel.id}")
-                continue
+            if not self.disable_fetch_channels:
+                try:
+                    channel = await self.guild.fetch_channel(channel.id)
+                except discord.Forbidden:
+                    logger.debug(f"Can't fetch channel {channel.name} | {channel.id}")
+                    continue
 
             category = None
             if channel.category_id is not None:
@@ -452,6 +467,11 @@ class ServerCopy:
         if self.debug:
             self.logger.debug(f"Collected {len(self.message_queue)} messages")
 
+        total_seconds = len(self.message_queue) * (self.webhook_delay + self.bot.latency)
+        remaining_time = datetime.timedelta(seconds=total_seconds)
+
+        self.logger.info(f"Calculated message cloning ETA: {format_time(remaining_time)}")
+
         await self.clone_messages_from_queue(clear_webhooks=clear_webhooks)
 
     async def cleanup_after_cloning(self, clear: bool = False) -> None:
@@ -507,7 +527,6 @@ class ServerCopy:
                     self.processed_channels.append(channel.id)
                     del channel_messages_map[channel]
 
-
     async def _clone_message_with_delay(self, channel: discord.channel.TextChannel, message: discord.Message) -> None:
         """
         Asynchronously clones a single message to a specific channel using a webhook with delay.
@@ -559,14 +578,7 @@ class ServerCopy:
                             self.new_messages_queue.append((new_channel, message))
                         return
 
-                    webhook: discord.Webhook = self.find_webhook(new_channel.id)
-
-                    if not webhook:
-                        webhook: discord.Webhook = await new_channel.create_webhook(name="bot by itskekoff")
-                        await asyncio.sleep(self.webhook_delay)
-
-                        self.create_webhook_log(channel_name=new_channel.name)
-                        self.mappings["webhooks"][message.channel.id] = webhook
-                    await self.send_webhook(webhook, message, self.webhook_delay)
+                    await self._clone_message_with_delay(channel=new_channel, message=message)
+                    await asyncio.sleep(self.webhook_delay)
             except KeyError:
                 pass

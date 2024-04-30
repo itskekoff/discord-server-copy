@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import time
 from collections import defaultdict
 
@@ -8,6 +9,7 @@ from discord.ext import commands
 import main
 from modules.arg_parser import parse_args
 from modules.cloner import ServerCopy
+from modules.utilities import format_time
 
 
 def format_guild_name(target_guild: discord.Guild) -> str:
@@ -52,7 +54,8 @@ class ClonerCog(commands.Cog):
             "clone_stickers": main.clone_stickers,
             "clone_messages": main.clone_messages_enabled,
             "real_time_messages": main.live_update_enabled,
-            "process_new_messages": main.process_new_messages_enabled
+            "process_new_messages": main.process_new_messages_enabled,
+            "disable_fetch_channels": False
         }
 
         args = parse_args(args_str, defaults)
@@ -65,6 +68,7 @@ class ClonerCog(commands.Cog):
         target_name = format_guild_name(target_guild=guild)
 
         cloner: ServerCopy = ServerCopy(
+            bot=self.bot,
             from_guild=guild,
             to_guild=None,
             delay=main.clone_delay,
@@ -73,6 +77,7 @@ class ClonerCog(commands.Cog):
             process_new_messages=args["process_new_messages"],
             clone_messages_toggled=args["clone_messages"],
             oldest_first=main.clone_oldest_first,
+            disable_fetch_channels=args["disable_fetch_channels"]
         )
         logger = cloner.logger
         self.cloners.append(cloner)
@@ -82,15 +87,15 @@ class ClonerCog(commands.Cog):
             try:
                 new_guild: discord.Guild = await self.bot.create_guild(name=target_name)
             except discord.HTTPException:
-                logger.error(
-                    'Unable to create server automatically. Create it yourself and run command with "new=id" argument')
+                logger.error("Unable to create server automatically. ")
+                logger.error('Create it yourself and run command with "new=id" argument')
                 return
         else:
             logger.info("Getting server...")
             new_guild: discord.Guild = await self.bot.fetch_guild(args["new"])
 
         if new_guild is None:
-            logger.error("Can't create server. Maybe account invalid or requires captcha?")
+            logger.error("Can't create server. Maybe account disabled or requires captcha?")
             return
 
         if new_guild.name is not target_name:
@@ -130,7 +135,8 @@ class ClonerCog(commands.Cog):
         if not args["real_time_messages"]:
             self.cloners.remove(cloner)
 
-        logger.success(f"Done in {round((time.time() - start_time), 2)} seconds.")
+        done_seconds = round((time.time() - start_time), 2)
+        logger.success(f"Done in {format_time(datetime.timedelta(seconds=done_seconds))}")
 
 
 async def setup(bot):
