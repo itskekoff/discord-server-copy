@@ -159,9 +159,16 @@ async def on_message(message: discord.Message):
 @bot.command(name="help")
 async def print_help(ctx: commands.Context):
     """
-    Displays help message
+    Sends this message
     """
-    await ctx.message.edit(content=f"```\n{get_command_info(bot)}```")
+
+    help_message = f"""```\n
+* Version: {VERSION}
+* Github: github.com/itskekoff/discord-server-copy\n
+{get_command_info(bot)}
+```
+    """
+    await ctx.message.edit(content=help_message)
 
 
 if __name__ == "__main__":

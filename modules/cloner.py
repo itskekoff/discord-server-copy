@@ -114,6 +114,11 @@ class ServerCopy:
         ]
 
         method_names = ['roles', 'channels', 'emojis', 'stickers']
+
+        if "COMMUNITY" in self.guild.features:
+            self.enabled_community = True
+            self.logger.warning("Community mode is toggled. Will be set up after channel processing (if enabled).")
+
         for method_name, method in zip(method_names, methods):
             if self.debug:
                 self.logger.debug(f"Processing cleaning method: {method_name}...")
@@ -129,10 +134,6 @@ class ServerCopy:
             await asyncio.sleep(self.delay)
 
         await self.new_guild.edit(icon=None, banner=None, description=None)
-
-        if "COMMUNITY" in self.guild.features:
-            self.enabled_community = True
-            self.logger.warning("Community mode is toggled. Will be set up after channel processing (if enabled).")
 
     async def fetch_required_data(self) -> None:
         """
@@ -440,9 +441,9 @@ class ServerCopy:
             if self.debug:
                 content = (truncate_string(string=message.content, length=32,
                                            replace_newline_with="") if message.content else "")
-
+                content = content.rstrip()
                 self.logger.debug(f"Cloned message from {author.name}" + f": {content}" if content else "")
-        except discord.HTTPException and discord.Forbidden:
+        except discord.HTTPException or discord.Forbidden:
             if self.debug:
                 self.logger.debug(
                     "Can't send, skipping message in #{}".format(message.channel.name if message.channel else ""))
