@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+import time
 
 from datetime import datetime
 
@@ -14,7 +15,7 @@ from modules.configuration import Configuration, check_missing_keys
 from modules.updater import Updater
 from modules.utilities import get_command_info, format_time
 
-VERSION = "1.4.5"
+VERSION = "1.4.6"
 
 config_path = "config.json"
 data: Configuration = Configuration(config_path)

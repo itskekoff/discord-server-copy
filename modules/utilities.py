@@ -117,16 +117,20 @@ def format_time(delta: timedelta) -> str:
              The singular or plural form of words (day/hour/minute/second) is used
              based on their quantity. Only non-zero time units are included.
     """
-    days, seconds = delta.days, delta.seconds
+    years = delta.days // 365
+    days = delta.days % 365
+    seconds = delta.seconds
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     seconds = seconds % 60
     time_parts = [
+        ('year', years),
         ("day", days),
         ("hour", hours),
         ("minute", minutes),
         ("second", seconds)
     ]
+
     return " ".join(f"{value} {name}{('s' if value != 1 else '')}"
                     for name, value in time_parts if value)
 

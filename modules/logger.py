@@ -61,6 +61,9 @@ class Logger:
     def critical(self, message, *args: Any, **kwargs: Any) -> None:
         self.main_logger.critical(message, *args, **kwargs)
 
+    def opt(self, **kwargs) -> logger:
+        return self.main_logger.opt(**kwargs)
+
     def bind(self, **kwargs: Any) -> logger:
         self.main_logger = self.main_logger.bind(**kwargs)
         return self.main_logger

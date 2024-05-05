@@ -119,11 +119,6 @@ class ClonerCog(commands.Cog):
                                                                 cloner.clone_channels))
         conditions_to_functions[args["clone_emojis"]].append(("Processing server emojis...", cloner.clone_emojis))
         conditions_to_functions[args["clone_stickers"]].append(("Processing stickers...", cloner.clone_stickers))
-        if cloner.enabled_community:
-            conditions_to_functions[args["clone_channels"]].append(("Processing community settings...",
-                                                                    cloner.process_community))
-            conditions_to_functions[args["clone_channels"]].append(("Processing community additional channels...",
-                                                                    cloner.add_community_channels))
         conditions_to_functions[args["clone_messages"]].append(("Processing server messages...",
                                                                 cloner.clone_messages))
         true_conditions = conditions_to_functions[True]

@@ -98,6 +98,10 @@ class ServerCopy:
         for channel_id, new_channel in self.mappings["channels"].items():
             try:
                 original_channel: discord.TextChannel = await self.guild.fetch_channel(channel_id)
+
+                if isinstance(original_channel, discord.ForumChannel) or isinstance(original_channel, discord.StageChannel):
+                    continue
+
                 async for message in original_channel.history(limit=limit, oldest_first=self.clone_oldest_first):
                     self.message_queue.append((new_channel, message))
             except discord.Forbidden:
@@ -278,27 +282,36 @@ class ServerCopy:
                                         channel_id=new_channel.id)
             await asyncio.sleep(self.delay)
 
+        if self.enabled_community:
+            self.logger.info("Processing community settings")
+            await self.process_community()
+
+            self.logger.info("Processing community channels")
+            await self.add_community_channels(perms=perms)
+
     async def process_community(self) -> None:
         """
         Applies community-related settings to the new guild such as AFK settings, verification level, notification settings, and system channel flags.
         """
         if self.enabled_community:
-            afk_channel = None
-            try:
+            afk_channel, system_channel = None, None
+            if self.guild.afk_channel is not None:
                 afk_channel = self.mappings["channels"][self.guild.afk_channel.id]
-            except KeyError:
-                pass
+            if self.guild.system_channel is not None:
+                system_channel = self.mappings["channels"][self.guild.system_channel]
+
             await self.new_guild.edit(community=True, verification_level=self.guild.verification_level,
                                       default_notifications=self.guild.default_notifications, afk_channel=afk_channel,
                                       afk_timeout=self.guild.afk_timeout,
-                                      system_channel=self.mappings["channels"][self.guild.system_channel.id],
+                                      system_channel=system_channel,
                                       system_channel_flags=self.guild.system_channel_flags,
                                       rules_channel=self.mappings["channels"][self.guild.rules_channel.id],
                                       public_updates_channel=self.mappings["channels"][
                                           self.guild.public_updates_channel.id],
                                       explicit_content_filter=self.guild.explicit_content_filter,
                                       preferred_locale=self.guild.preferred_locale)
-            self.logger.info("Updated guild community settings")
+            if self.debug:
+                self.logger.debug("Updated guild community settings")
             await asyncio.sleep(self.delay)
 
     async def add_community_channels(self, perms: bool = True) -> None:
@@ -314,7 +327,9 @@ class ServerCopy:
                 if isinstance(channel, (discord.ForumChannel, discord.StageChannel)):
                     all_channels.append(channel)
             for channel in all_channels:
-                category = self.mappings["categories"][channel.category_id]
+                category = None
+                if channel.category_id:
+                    category = self.mappings["categories"][channel.category_id]
                 overwrites: dict = {}
                 if perms and channel.overwrites:
                     for role, permissions in channel.overwrites.items():
@@ -438,7 +453,7 @@ class ServerCopy:
         try:
             await webhook.send(content=content, avatar_url=author.display_avatar.url,
                                username=name, embeds=message.embeds, files=files)
-            if self.debug:
+            if self.debug and message.content:
                 content = (truncate_string(string=message.content, length=32,
                                            replace_newline_with="") if message.content else "")
                 content = content.rstrip()
