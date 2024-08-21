@@ -99,13 +99,14 @@ class ServerCopy:
             try:
                 original_channel: discord.TextChannel = await self.guild.fetch_channel(channel_id)
 
-                if isinstance(original_channel, discord.ForumChannel) or isinstance(original_channel, discord.StageChannel):
+                if isinstance(original_channel, discord.ForumChannel) or isinstance(original_channel,
+                                                                                    discord.StageChannel):
                     continue
 
                 async for message in original_channel.history(limit=limit, oldest_first=self.clone_oldest_first):
                     self.message_queue.append((new_channel, message))
             except discord.Forbidden:
-                logger.debug(f"Can't fetch channel message history (no permissions): {channel_id}")
+                self.logger.debug(f"Can't fetch channel message history (no permissions): {channel_id}")
                 continue
 
     async def prepare_server(self) -> None:
@@ -246,7 +247,7 @@ class ServerCopy:
                 try:
                     channel = await self.guild.fetch_channel(channel.id)
                 except discord.Forbidden:
-                    logger.debug(f"Can't fetch channel {channel.name} | {channel.id}")
+                    self.logger.debug(f"Can't fetch channel {channel.name} | {channel.id}")
                     continue
 
             category = None
@@ -284,35 +285,38 @@ class ServerCopy:
 
         if self.enabled_community:
             self.logger.info("Processing community settings")
-            await self.process_community()
 
-            self.logger.info("Processing community channels")
-            await self.add_community_channels(perms=perms)
+            if await self.process_community():
+                self.logger.info("Processing community channels")
+                await self.add_community_channels(perms=perms)
 
-    async def process_community(self) -> None:
+    async def process_community(self) -> bool:
         """
         Applies community-related settings to the new guild such as AFK settings, verification level, notification settings, and system channel flags.
         """
         if self.enabled_community:
-            afk_channel, system_channel = None, None
-            if self.guild.afk_channel is not None:
-                afk_channel = self.mappings["channels"][self.guild.afk_channel.id]
-            if self.guild.system_channel is not None:
-                system_channel = self.mappings["channels"][self.guild.system_channel]
+            afk_channel = self._get_channel_from_mapping(self.guild.afk_channel)
+            system_channel = self._get_channel_from_mapping(self.guild.system_channel)
+            public_updates = self._get_channel_from_mapping(self.guild.public_updates_channel)
+            rules_channel = self._get_channel_from_mapping(self.guild.rules_channel)
+
+            if not public_updates:
+                self.logger.error("Can't create community: missing access to public updates channel")
+                return False
 
             await self.new_guild.edit(community=True, verification_level=self.guild.verification_level,
                                       default_notifications=self.guild.default_notifications, afk_channel=afk_channel,
                                       afk_timeout=self.guild.afk_timeout,
                                       system_channel=system_channel,
                                       system_channel_flags=self.guild.system_channel_flags,
-                                      rules_channel=self.mappings["channels"][self.guild.rules_channel.id],
-                                      public_updates_channel=self.mappings["channels"][
-                                          self.guild.public_updates_channel.id],
+                                      rules_channel=rules_channel,
+                                      public_updates_channel=public_updates,
                                       explicit_content_filter=self.guild.explicit_content_filter,
                                       preferred_locale=self.guild.preferred_locale)
             if self.debug:
                 self.logger.debug("Updated guild community settings")
             await asyncio.sleep(self.delay)
+            return True
 
     async def add_community_channels(self, perms: bool = True) -> None:
         """
@@ -526,6 +530,18 @@ class ServerCopy:
                 await self._process_messages_channel_map(new_messages_map)
 
         await self.cleanup_after_cloning(clear=clear_webhooks)
+
+    def _get_channel_from_mapping(self, channel):
+        """
+        Retrieves the corresponding mapped channel if it exists and the channel is not None.
+
+        Args:
+            channel (discord.Channel or None): The channel object to retrieve from the mappings.
+                                               If None, the method returns None.
+        """
+        if channel:
+            return self.mappings["channels"].get(channel.id)
+        return None
 
     async def _process_messages_channel_map(self, channel_messages_map):
         """

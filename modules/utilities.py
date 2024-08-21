@@ -107,14 +107,14 @@ async def get_first_frame(image: discord.Asset) -> bytes:
 
 def format_time(delta: timedelta) -> str:
     """
-    Formats a timedelta object into a readable English string.
+    Formats a timedelta object into a readable string.
 
     Args:
         delta (timedelta): A timedelta object representing a duration.
 
     Returns:
-        str: A formatted time string in the format "X days Y hours Z minutes W seconds".
-             The singular or plural form of words (day/hour/minute/second) is used
+        str: A formatted time string in the format "X years X days Y hours Z minutes W seconds".
+             The singular or plural form of words (year/day/hour/minute/second) is used
              based on their quantity. Only non-zero time units are included.
     """
     years = delta.days // 365
@@ -123,6 +123,7 @@ def format_time(delta: timedelta) -> str:
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     seconds = seconds % 60
+
     time_parts = [
         ('year', years),
         ("day", days),

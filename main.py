@@ -3,7 +3,6 @@
 import logging
 import os
 import sys
-import time
 
 from datetime import datetime
 
@@ -13,9 +12,9 @@ from discord.ext import commands
 from modules.logger import Logger
 from modules.configuration import Configuration, check_missing_keys
 from modules.updater import Updater
-from modules.utilities import get_command_info, format_time
+from modules.utilities import get_command_info
 
-VERSION = "1.4.6"
+VERSION = "1.4.7"
 
 config_path = "config.json"
 data: Configuration = Configuration(config_path)
@@ -120,9 +119,7 @@ logger = Logger(debug_enabled=debug)
 
 if clone_channels and (not clone_roles and clone_overwrites):
     clone_roles = True
-    logger.warning(
-        "Clone roles enabled because clone overwrites and channels are enabled."
-    )
+    logger.warning("Clone roles enabled because clone overwrites and channels are enabled.")
 
 if live_update_enabled and not clone_channels:
     logger.error("Live update disabled because clone channels is disabled.")
