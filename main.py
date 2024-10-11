@@ -14,7 +14,7 @@ from modules.configuration import Configuration, check_missing_keys
 from modules.updater import Updater
 from modules.utilities import get_command_info
 
-VERSION = "1.4.7"
+VERSION = "1.4.8"
 
 config_path = "config.json"
 data: Configuration = Configuration(config_path)

@@ -17,7 +17,7 @@ logger = Logger()
 
 class ServerCopy:
     def __init__(self, bot: discord.Client, from_guild: discord.Guild, to_guild: discord.Guild | None,
-                 delay: float = 1, webhook_delay: float = 0.65, debug_enabled: bool = True,
+                 args, delay: float = 1, webhook_delay: float = 0.65, debug_enabled: bool = True,
                  live_update_toggled: bool = False, process_new_messages: bool = True,
                  clone_messages_toggled: bool = False, oldest_first: bool = True,
                  disable_fetch_channels: bool = False):
@@ -28,6 +28,7 @@ class ServerCopy:
             bot (discord.Client): Discord bot instance
             from_guild (discord.Guild): The source guild to clone from.
             to_guild (discord.Guild | None): The target guild to clone to.
+            args: Parsed arguments from command
             delay (float): A delay between operations to prevent rate-limiting.
             webhook_delay (float): A specific delay for operations involving webhooks.
             debug_enabled (bool): Whether to enable debug logging.
@@ -41,6 +42,8 @@ class ServerCopy:
 
         self.guild = from_guild
         self.new_guild = to_guild
+
+        self.args = args
 
         self.delay = delay
         self.webhook_delay = webhook_delay
@@ -72,6 +75,7 @@ class ServerCopy:
         }
 
         self.processed_channels = []
+        self.last_executed_method = None
 
     def find_webhook(self, channel_id: int) -> discord.Webhook | None:
         """Find a webhook in the mappings by channel ID."""
@@ -129,6 +133,8 @@ class ServerCopy:
                 self.logger.debug(f"Processing cleaning method: {method_name}...")
             await self.cleanup_items(await method())
 
+        self.last_executed_method = "prepare_server"
+
     async def cleanup_items(self, items):
         """Helper method to clean up items like roles, channels, emojis, and stickers."""
         for item in items:
@@ -168,6 +174,8 @@ class ServerCopy:
             await self.new_guild.edit(icon=icon_bytes)
         await asyncio.sleep(self.delay)
 
+        self.last_executed_method = "clone_icon"
+
     async def clone_banner(self) -> None:
         """
         If present and the guild has the required features, clones the banner from the source guild to the new guild.
@@ -180,6 +188,8 @@ class ServerCopy:
                 banner_bytes = await get_first_frame(self.guild.banner)
             await self.new_guild.edit(banner=banner_bytes)
             await asyncio.sleep(self.delay)
+
+        self.last_executed_method = "clone_banner"
 
     async def clone_roles(self):
         """
@@ -205,6 +215,7 @@ class ServerCopy:
             self.mappings["roles"][role.id] = new_role
             self.create_object_log(object_type="role", object_name=new_role.name, object_id=new_role.id)
             await asyncio.sleep(self.delay)
+        self.last_executed_method = "clone_roles"
 
     async def clone_categories(self, perms: bool = True) -> None:
         """
@@ -234,6 +245,7 @@ class ServerCopy:
                 object_id=new_category.id,
             )
             await asyncio.sleep(self.delay)
+        self.last_executed_method = "clone_categories"
 
     async def clone_channels(self, perms: bool = True) -> None:
         """
@@ -290,6 +302,8 @@ class ServerCopy:
                 self.logger.info("Processing community channels")
                 await self.add_community_channels(perms=perms)
 
+        self.last_executed_method = "clone_channels"
+
     async def process_community(self) -> bool:
         """
         Applies community-related settings to the new guild such as AFK settings, verification level, notification settings, and system channel flags.
@@ -317,6 +331,7 @@ class ServerCopy:
                 self.logger.debug("Updated guild community settings")
             await asyncio.sleep(self.delay)
             return True
+        self.last_executed_method = "process_community"
 
     async def add_community_channels(self, perms: bool = True) -> None:
         """
@@ -370,6 +385,7 @@ class ServerCopy:
                     self.create_channel_log(channel_type="stage", channel_name=new_channel.name,
                                             channel_id=new_channel.id, )
                 await asyncio.sleep(self.delay)
+        self.last_executed_method = "add_community_channels"
 
     async def clone_emojis(self) -> None:
         """
@@ -386,6 +402,8 @@ class ServerCopy:
             self.mappings["emojis"][emoji.id] = new_emoji
             self.create_object_log(object_type="emoji", object_name=new_emoji.name, object_id=new_emoji.id)
             await asyncio.sleep(self.delay)
+
+        self.last_executed_method = "clone_emojis"
 
     async def clone_stickers(self) -> None:
         """
@@ -413,6 +431,8 @@ class ServerCopy:
                 await asyncio.sleep(self.delay)
             else:
                 break
+
+        self.last_executed_method = "clone_stickers"
 
     async def send_webhook(self, webhook: discord.Webhook, message: discord.Message,
                            delay: float = 0.85) -> None:
@@ -493,6 +513,7 @@ class ServerCopy:
         self.logger.info(f"Calculated message cloning ETA: {format_time(remaining_time)}")
 
         await self.clone_messages_from_queue(clear_webhooks=clear_webhooks)
+        self.last_executed_method = "clone_messages"
 
     async def cleanup_after_cloning(self, clear: bool = False) -> None:
         """
@@ -511,6 +532,7 @@ class ServerCopy:
             self.logger.success(f"Successfully cleaned up after cloning messages")
 
         self.processing_messages = False
+        self.last_executed_method = "cleanup_after_cloning"
 
     async def clone_messages_from_queue(self, clear_webhooks: bool = main.messages_webhook_clear) -> None:
         """
@@ -614,3 +636,62 @@ class ServerCopy:
                     await asyncio.sleep(self.webhook_delay)
             except KeyError:
                 pass
+
+    def save_state(self, filename="server_copy_state.json"):
+        """Saves the current state of the ServerCopy instance to a JSON file."""
+        state = {
+            "guild_id": self.guild.id,
+            "new_guild_id": self.new_guild.id if self.new_guild else None,
+            "delay": self.delay,
+            "args": self.args,
+            "webhook_delay": self.webhook_delay,
+            "debug_enabled": self.debug,
+            "live_update_toggled": self.live_update,
+            "process_new_messages": self.new_messages_enabled,
+            "clone_messages_toggled": self.clone_messages_toggled,
+            "oldest_first": self.clone_oldest_first,
+            "disable_fetch_channels": self.disable_fetch_channels,
+            "enabled_community": self.enabled_community,
+            "processing_messages": self.processing_messages,
+            "message_queue": list(self.message_queue),  # Convert deque to list
+            "new_messages_queue": list(self.new_messages_queue),
+            "mappings": self.mappings,
+            "processed_channels": self.processed_channels,
+            "last_executed_method": self.last_executed_method
+        }
+        with open(filename, "w") as f:
+            json.dump(state, f, indent=2)
+
+    def load_state(self, filename="server_copy_state.json"):
+        """Loads the state of the ServerCopy instance from a JSON file."""
+        try:
+            with open(filename, "r") as f:
+                state = json.load(f)
+
+            self.guild = self.bot.get_guild(state["guild_id"])
+            self.new_guild = self.bot.get_guild(state["new_guild_id"]) if state["new_guild_id"] else None
+
+            self.delay = state["delay"]
+            self.args = state["args"]
+            self.webhook_delay = state["webhook_delay"]
+            self.debug = state["debug_enabled"]
+            self.live_update = state["live_update_toggled"]
+            self.new_messages_enabled = state["process_new_messages"]
+            self.clone_messages_toggled = state["clone_messages_toggled"]
+            self.clone_oldest_first = state["oldest_first"]
+            self.disable_fetch_channels = state["disable_fetch_channels"]
+            self.enabled_community = state["enabled_community"]
+            self.processing_messages = state["processing_messages"]
+            self.message_queue = deque(state["message_queue"])
+            self.new_messages_queue = deque(state["new_messages_queue"])
+            self.mappings = state["mappings"]
+            self.processed_channels = state["processed_channels"]
+            self.last_executed_method = state["last_executed_method"]
+
+            self.logger = Logger(debug_enabled=self.debug)
+            self.logger.bind(source=self.guild.name)
+
+        except FileNotFoundError:
+            self.logger.warning(f"State file '{filename}' not found.")
+        except json.JSONDecodeError:
+            self.logger.error(f"Error decoding JSON data from '{filename}'.")

@@ -27,6 +27,53 @@ class ClonerCog(commands.Cog):
             for cloner in self.cloners:
                 await cloner.on_message(message=message)
 
+    @commands.command(name="process")
+    async def process(self, ctx: commands.Context, *, args_str: str = ""):
+        """
+        Manipulates over cloning process
+        Can be used while you need to disable bot and re-run clone.
+        """
+        await ctx.message.delete()
+
+        defaults = {
+            "save": True,
+            "load": False,
+            "start": False,
+        }
+
+        args = parse_args(args_str, defaults)
+
+        latest_cloner: ServerCopy = self.cloners[-1]
+        if args["save"] or (not args["load"] and not args["start"]):
+            latest_cloner.save_state()
+        if args["load"]:
+            latest_cloner.load_state()
+        if args["start"]:
+            last_method = latest_cloner.last_executed_method
+            cloner_args = latest_cloner.args
+            conditions_to_functions = {}
+
+            def append_if_different(condition, logger_message, executing_function):
+                if condition and last_method != function.__name__:
+                    conditions_to_functions[True] = conditions_to_functions.get(True, [])
+                    conditions_to_functions[True].append((logger_message, executing_function))
+
+            append_if_different(cloner_args["clear_guild"], "Preparing guild to process...", cloner.prepare_server)
+            append_if_different(cloner_args["clone_icon"], "Processing server icon...", cloner.clone_icon)
+            append_if_different(cloner_args["clone_banner"], "Processing server banner...", cloner.clone_banner)
+            append_if_different(cloner_args["clone_roles"], "Processing server roles...", cloner.clone_roles)
+            append_if_different(cloner_args["clone_channels"], "Processing server categories...",
+                                cloner.clone_categories)
+            append_if_different(cloner_args["clone_channels"], "Processing server channels...", cloner.clone_channels)
+            append_if_different(cloner_args["clone_emojis"], "Processing server emojis...", cloner.clone_emojis)
+            append_if_different(cloner_args["clone_stickers"], "Processing stickers...", cloner.clone_stickers)
+            append_if_different(cloner_args["clone_messages"], "Processing server messages...", cloner.clone_messages)
+            true_conditions = conditions_to_functions[True]
+
+            for message, function in true_conditions:
+                logger.info(message)
+                await function()
+
     @commands.command(name="copy", aliases=["clone", "paste", "parse", "start"])
     async def copy(self, ctx: commands.Context, *, args_str: str = ""):
         """
@@ -69,6 +116,7 @@ class ClonerCog(commands.Cog):
 
         cloner: ServerCopy = ServerCopy(
             bot=self.bot,
+            args=args,
             from_guild=guild,
             to_guild=None,
             delay=main.clone_delay,
