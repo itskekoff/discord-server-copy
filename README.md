@@ -1,5 +1,7 @@
 # Discord Server Cloner
 
+*no longer maintained.*
+
 Clone an entire Discord server seamlessly without risking a ban. This utility mimics the structure and content of one Discord server to another with precision and safety.
 
 Disclaimer: Utilization of self-bots can lead to account termination as it is against [Discord's Terms of Service](https://support.discord.com/hc/en-us/articles/115002192352-Automated-User-Accounts-Self-Bots).
