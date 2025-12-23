@@ -47,7 +47,7 @@ Commands can include server IDs to specify source and destination servers:
 Config settings can be adjusted on-the-fly via clone commands, e.g., 
 `cp!clone from=1337 live_update=true clone_message=false`
 
-More detailed command help in "help" command, e.g. `cp!help`
+More detailed help in "help" command, e.g. `cp!help`
 
 ### Arguments List
 
